@@ -1,0 +1,10 @@
+addr: 0.0.0.0:9000
+
+clients:
+  - id: 1
+    binds:
+      - bind_addr: 0.0.0.0:3000
+        local_addr: 192.168.124.200:22
+
+
+

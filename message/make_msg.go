@@ -1,0 +1,43 @@
+package message
+
+import "github.com/lakakala/luna-nt-go/pb"
+
+func MakeAuthReq(token string, clientID uint64) Message {
+	authReq := pb.AuthReq{}
+	authReq.Token = &token
+	authReq.ClientId = &clientID
+	return NewPbMessage(COMMAND_AUTH_REQ, &authReq)
+}
+
+func MakeAuthResp(code int32, msg string) Message {
+	authResp := pb.AuthResp{}
+	authResp.BaseResp = &pb.BaseResp{
+		Code: &code,
+		Msg:  &msg,
+	}
+
+	return NewPbMessage(COMMAND_AUTH_RESP, &authResp)
+}
+
+func MakeConnectReq(channelID uint64, localAddr string) Message {
+	connectReq := pb.ConnectReq{}
+	connectReq.Addr = &localAddr
+	connectReq.SessionId = &channelID
+	return NewPbMessage(COMMAND_CONNECT_REQ, &connectReq)
+}
+
+func MakeConnectResp(code int32, msg string) Message {
+	connectResp := pb.ConnectResp{}
+	connectResp.BaseResp = &pb.BaseResp{
+		Code: &code,
+		Msg:  &msg,
+	}
+
+	return NewPbMessage(COMMAND_CONNECT_RESP, &connectResp)
+}
+
+func MakeDataNoti(channelID uint64, data []byte) Message {
+	dataNoti := pb.DataNoti{}
+	dataNoti.Data = data
+	return NewPbMessage(COMMAND_DATA, &dataNoti)
+}
