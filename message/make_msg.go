@@ -22,7 +22,7 @@ func MakeAuthResp(code int32, msg string) Message {
 func MakeConnectReq(channelID uint64, localAddr string) Message {
 	connectReq := pb.ConnectReq{}
 	connectReq.Addr = &localAddr
-	connectReq.SessionId = &channelID
+	connectReq.ChannelId = &channelID
 	return NewPbMessage(COMMAND_CONNECT_REQ, &connectReq)
 }
 
@@ -38,6 +38,23 @@ func MakeConnectResp(code int32, msg string) Message {
 
 func MakeDataNoti(channelID uint64, data []byte) Message {
 	dataNoti := pb.DataNoti{}
+	dataNoti.ChannelId = &channelID
 	dataNoti.Data = data
 	return NewPbMessage(COMMAND_DATA, &dataNoti)
+}
+
+func MakeChannelCloseReq(channelID uint64) Message {
+	channelCloseReq := pb.CloseChannelReq{}
+	channelCloseReq.ChannelId = &channelID
+	return NewPbMessage(COMMAND_CHANNEL_CLOSE_REQ, &channelCloseReq)
+}
+
+func MakeChannelCloseResp(code int32, msg string) Message {
+	channelCloseResp := pb.CloseChannelResp{}
+	channelCloseResp.BaseResp = &pb.BaseResp{
+		Code: &code,
+		Msg:  &msg,
+	}
+
+	return NewPbMessage(COMMAND_CONNECT_RESP, &channelCloseResp)
 }

@@ -27,13 +27,26 @@ message ConnectResp {
 }
 
 message DataNoti {
-  optional uint64 channel_id = 1
+  optional uint64 channel_id = 1;
   optional bytes data = 2;
 }
 
-message CloseChannel {
+message CloseChannelReadHalfReq {
   optional uint64 channel_id = 1;
 }
+
+message CloseChannelReadResp {
+  optional BaseResp base_resp = 1;
+}
+
+message CloseChannelWriteReq {
+  optional uint64 channel_id = 1;
+}
+
+message CloseChannelWriteResp {
+  optional BaseResp base_resp = 1;
+}
+
 
 message DataWindowNoti {
     optional uint32 size = 1;

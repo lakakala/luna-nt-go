@@ -9,19 +9,29 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var decoder = make(map[CommandType]decode)
+type MessageType uint16
 
-var encoder = make(map[CommandType]encode)
-
-func registerCodec(cmd CommandType, decode decode, encode encode) {
-
-	decoder[cmd] = decode
-	encoder[cmd] = encode
-}
+const (
+	MessageTypeReq  MessageType = 1
+	MessageTypeResp MessageType = 2
+	MessageTypeNoti MessageType = 3
+)
 
 type decode = func(ctx context.Context, data []byte) (Message, error)
 
 type encode = func(ctx context.Context, msg Message) ([]byte, error)
+
+var (
+	decoder     = make(map[CommandType]decode)
+	encoder     = make(map[CommandType]encode)
+	messageType = make(map[CommandType]MessageType)
+)
+
+func registerCodec(cmd CommandType, decode decode, encode encode, msgType MessageType) {
+	decoder[cmd] = decode
+	encoder[cmd] = encode
+	messageType[cmd] = msgType
+}
 
 func init() {
 
@@ -42,7 +52,7 @@ func init() {
 		}
 
 		return data, nil
-	})
+	}, MessageTypeReq)
 
 	registerCodec(COMMAND_AUTH_RESP, func(ctx context.Context, data []byte) (Message, error) {
 		var resp = &pb.AuthResp{}
@@ -61,7 +71,102 @@ func init() {
 		}
 
 		return data, nil
-	})
+	}, MessageTypeResp)
+
+	registerCodec(COMMAND_CONNECT_REQ, func(ctx context.Context, data []byte) (Message, error) {
+		var req = &pb.ConnectReq{}
+
+		if err := proto.Unmarshal(data, req); err != nil {
+			return nil, err
+		}
+
+		return NewPbMessage(COMMAND_CONNECT_REQ, req), nil
+	}, func(ctx context.Context, msg Message) ([]byte, error) {
+		req := msg.Msg().(*pb.ConnectReq)
+
+		data, err := proto.Marshal(req)
+		if err != nil {
+			return nil, err
+		}
+
+		return data, nil
+	}, MessageTypeReq)
+
+	registerCodec(COMMAND_CONNECT_RESP, func(ctx context.Context, data []byte) (Message, error) {
+		var resp = &pb.ConnectResp{}
+
+		if err := proto.Unmarshal(data, resp); err != nil {
+			return nil, err
+		}
+
+		return NewPbMessage(COMMAND_CONNECT_RESP, resp), nil
+	}, func(ctx context.Context, msg Message) ([]byte, error) {
+		resp := msg.Msg().(*pb.ConnectResp)
+
+		data, err := proto.Marshal(resp)
+		if err != nil {
+			return nil, err
+		}
+
+		return data, nil
+	}, MessageTypeResp)
+
+	registerCodec(COMMAND_DATA, func(ctx context.Context, data []byte) (Message, error) {
+		var msg = &pb.DataNoti{}
+
+		if err := proto.Unmarshal(data, msg); err != nil {
+			return nil, err
+		}
+
+		return NewPbMessage(COMMAND_DATA, msg), nil
+	}, func(ctx context.Context, msg Message) ([]byte, error) {
+		dataMsg := msg.Msg().(*pb.DataNoti)
+
+		data, err := proto.Marshal(dataMsg)
+		if err != nil {
+			return nil, err
+		}
+
+		return data, nil
+	}, MessageTypeNoti)
+
+	registerCodec(COMMAND_CHANNEL_CLOSE_REQ, func(ctx context.Context, data []byte) (Message, error) {
+		var req = &pb.CloseChannelReq{}
+
+		if err := proto.Unmarshal(data, req); err != nil {
+			return nil, err
+		}
+
+		return NewPbMessage(COMMAND_CHANNEL_CLOSE_REQ, req), nil
+	}, func(ctx context.Context, msg Message) ([]byte, error) {
+		req := msg.Msg().(*pb.CloseChannelReq)
+
+		data, err := proto.Marshal(req)
+		if err != nil {
+			return nil, err
+		}
+
+		return data, nil
+	}, MessageTypeReq)
+
+	registerCodec(COMMAND_CHANNEL_CLOSE_RESP, func(ctx context.Context, data []byte) (Message, error) {
+		var resp = &pb.CloseChannelResp{}
+
+		if err := proto.Unmarshal(data, resp); err != nil {
+			return nil, err
+		}
+
+		return NewPbMessage(COMMAND_CHANNEL_CLOSE_RESP, resp), nil
+	}, func(ctx context.Context, msg Message) ([]byte, error) {
+		resp := msg.Msg().(*pb.CloseChannelResp)
+
+		data, err := proto.Marshal(resp)
+		if err != nil {
+			return nil, err
+		}
+
+		return data, nil
+	}, MessageTypeResp)
 
 }
 
@@ -150,4 +255,8 @@ func Encode(ctx context.Context, writer io.Writer, frame *Frame) error {
 	}
 
 	return nil
+}
+
+func MsgType(cmdType CommandType) MessageType {
+	return messageType[cmdType]
 }

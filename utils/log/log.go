@@ -78,6 +78,10 @@ func CtxInfof(ctx context.Context, format string, args ...interface{}) {
 	logger.Info(fmt.Sprintf(format, args...))
 }
 
+func CtxWarnf(ctx context.Context, format string, args ...interface{}) {
+	logger.Warn(fmt.Sprintf(format, args...))
+}
+
 func CtxErrorf(ctx context.Context, format string, args ...interface{}) {
 	logger.Error(fmt.Sprintf(format, args...))
 }

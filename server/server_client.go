@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"sync"
 
@@ -21,6 +22,7 @@ const (
 
 type Client struct {
 	mutex      sync.Mutex
+	conf       *Config
 	clientConf *ClientConfig
 
 	channelManager *ChannelManager
@@ -33,17 +35,29 @@ type Client struct {
 	clientID uint64
 }
 
-func newClient(ctx context.Context, rawConn net.Conn) (*Client, error) {
+func newClient(ctx context.Context, conf *Config, clientManager *ClientManager, rawConn net.Conn) (*Client, error) {
 
 	conn, err := conn.NewConnFromRawConn(ctx, rawConn)
 	if err != nil {
 		return nil, err
 	}
 
+	channelManager := newChannelManager()
+
+	clientListenerManager := newClientListenerManager()
 	return &Client{
+		mutex:      sync.Mutex{},
+		conf:       conf,
+		clientConf: nil,
+
+		channelManager: channelManager,
+
+		clientManager:         clientManager,
+		clientListenerManager: clientListenerManager,
+
+		clientID: 0,
 		status:   ClientStatusUninit,
 		conn:     conn,
-		clientID: 0,
 	}, nil
 }
 
@@ -56,37 +70,53 @@ func (c *Client) ClientID() uint64 {
 
 func (c *Client) start(ctx context.Context) error {
 	for {
-		recvCtx, err := c.conn.Accept()
+		recvCtx, err := c.conn.Accept(ctx)
 		if err != nil {
 			return err
 		}
 
-		switch recvCtx.Frame().Command() {
-		case message.COMMAND_AUTH_REQ:
-			c.handleAuthReq(ctx, recvCtx)
-		case message.COMMAND_DATA:
-			c.handleData(ctx, recvCtx)
+		if err := func() error {
+			frame, err := recvCtx.Frame()
+			if err != nil {
+				return err
+			}
+
+			switch frame.Command() {
+			case message.COMMAND_AUTH_REQ:
+				return c.handleAuthReq(ctx, recvCtx)
+			case message.COMMAND_DATA:
+				return c.handleData(ctx, recvCtx)
+			default:
+				return errors.New(fmt.Sprintf("unknown command %d", frame.Command()))
+			}
+		}(); err != nil {
+			log.CtxErrorf(ctx, "Client %d accpet handler failed err %s", c.ClientID(), err)
+			break
 		}
 	}
+
+	return nil
 }
 
 func (c *Client) handleAuthReq(ctx context.Context, recvCtx *conn.RecvMessageContext) error {
-	authReq := recvCtx.Frame().Msg().Msg().(*pb.AuthReq)
+	frame, err := recvCtx.Frame()
+	if err != nil {
+		return err
+	}
+	authReq := frame.Msg().Msg().(*pb.AuthReq)
 	log.CtxInfof(ctx, "authReq: %v", authReq)
 	if authReq.ClientId == nil {
 		log.CtxErrorf(ctx, "clientID is nil")
 		return nil
 	}
 
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	func() {
+		c.mutex.Lock()
+		defer c.mutex.Unlock()
 
-	if c.clientID != 0 {
-		log.CtxErrorf(ctx, "clientID %d already inited", c.clientID)
-		return nil
-	}
-
-	c.clientID = *authReq.ClientId
+		c.clientID = *authReq.ClientId
+		c.clientConf = c.conf.Clients[c.clientID]
+	}()
 
 	if !c.clientManager.AddClient(ctx, c) {
 
@@ -113,9 +143,13 @@ func (c *Client) handleAuthReq(ctx context.Context, recvCtx *conn.RecvMessageCon
 }
 
 func (c *Client) handleData(ctx context.Context, recvCtx *conn.RecvMessageContext) error {
-	dataNoti := recvCtx.Frame().Msg().Msg().(*pb.DataNoti)
+	frame, err := recvCtx.Frame()
+	if err != nil {
+		return err
+	}
+	dataNoti := frame.Msg().Msg().(*pb.DataNoti)
 
-	channelID := uint64(0)
+	channelID := dataNoti.GetChannelId()
 
 	channel, err := c.channelManager.GetChannel(channelID)
 	if err != nil {
@@ -139,12 +173,22 @@ func (c *Client) Connect(ctx context.Context, remoteConn net.Conn, localAddr str
 
 	connectResp := resp.Msg().(*pb.ConnectResp)
 	if connectResp.BaseResp.GetCode() != 0 {
+		log.CtxWarnf(ctx, "Client %d alloc channel failed code %d msg %s",
+			c.ClientID(), connectResp.BaseResp.GetCode(), connectResp.BaseResp.GetMsg())
 		return errors.New(connectResp.BaseResp.GetMsg())
 	}
 
-	channel := NewChannel(ctx, c.channelManager, remoteConn, c.conn)
+	channel := NewChannel(ctx, c.channelManager, channelID, remoteConn, c.conn)
 
-	return c.channelManager.AddChannel(channel)
+	log.CtxInfof(ctx, "Client %d alloc channel success channelID %d", c.ClientID(), channel.ChannelID())
+
+	if err := c.channelManager.AddChannel(channel); err != nil {
+		return err
+	}
+
+	channel.start(ctx)
+
+	return nil
 }
 
 func (c *Client) startRemoteListener(ctx context.Context) error {
@@ -160,6 +204,9 @@ func (c *Client) startRemoteListener(ctx context.Context) error {
 		}
 
 		go listener.Start(ctx)
+
+		log.CtxInfof(ctx, "Client %d start listener listenderID %d bindAddr %s localAddr %s success",
+			c.ClientID(), clientBind.ID, clientBind.BindAddr, clientBind.LocalAddr)
 	}
 
 	return nil
@@ -200,6 +247,8 @@ func (cl *ClientListener) Start(ctx context.Context) {
 			continue
 		}
 
+		log.CtxInfof(ctx, "ClientListener %d accept conn remoteAddr %s localAddr %s", cl.ID(), conn.RemoteAddr().String(), conn.LocalAddr().String())
+
 		go cl.handleConn(ctx, conn)
 	}
 }
@@ -214,6 +263,13 @@ func (cl *ClientListener) handleConn(ctx context.Context, conn net.Conn) {
 type ClientListenerManager struct {
 	mutex     sync.Mutex
 	listeners map[uint64]*ClientListener
+}
+
+func newClientListenerManager() *ClientListenerManager {
+	return &ClientListenerManager{
+		mutex:     sync.Mutex{},
+		listeners: make(map[uint64]*ClientListener),
+	}
 }
 
 func (m *ClientListenerManager) AddListener(ctx context.Context, listener *ClientListener) error {

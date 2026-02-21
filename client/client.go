@@ -2,11 +2,14 @@ package client
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/lakakala/luna-nt-go/conn"
 	"github.com/lakakala/luna-nt-go/message"
 	"github.com/lakakala/luna-nt-go/pb"
+	"github.com/lakakala/luna-nt-go/utils/log"
 )
 
 func StartClient(conf *Config) error {
@@ -45,9 +48,13 @@ func newClient(ctx context.Context, conf *Config) (*Client, error) {
 	}
 
 	cli := &Client{
+		mutex: sync.Mutex{},
+
+		localConnMap: make(map[uint64]*LocalConn),
+
+		status: ClientStatusUninit,
 		conf:   conf,
 		conn:   conn,
-		status: ClientStatusUninit,
 	}
 
 	return cli, nil
@@ -59,15 +66,31 @@ func (cli *Client) start(ctx context.Context) {
 
 	for {
 
-		recvCtx, err := cli.conn.Accept()
+		recvCtx, err := cli.conn.Accept(ctx)
 		if err != nil {
 			cli.Close(err)
 			return
 		}
 
-		switch recvCtx.Frame().Command() {
-		case message.COMMAND_CONNECT_REQ:
-			cli.handleConnect(ctx, recvCtx)
+		if err := func() error {
+			frame, err := recvCtx.Frame()
+			if err != nil {
+				return err
+			}
+
+			switch frame.Command() {
+			case message.COMMAND_CONNECT_REQ:
+				return cli.handleConnect(ctx, recvCtx)
+
+			case message.COMMAND_DATA:
+				return cli.handleData(ctx, recvCtx)
+
+			default:
+				return errors.New(fmt.Sprintf("unknown command %d", frame.Command()))
+			}
+		}(); err != nil {
+			log.CtxErrorf(ctx, "Client %d accpet handler failed err %s", cli.conf.ClientID, err)
+			break
 		}
 	}
 }
@@ -96,9 +119,16 @@ func (cli *Client) auth(ctx context.Context) {
 
 func (cli *Client) handleConnect(ctx context.Context, recvCtx *conn.RecvMessageContext) error {
 
-	req := recvCtx.Frame().Msg().Msg().(*pb.ConnectReq)
+	frame, err := recvCtx.Frame()
+	if err != nil {
+		return err
+	}
 
-	localConn, err := NewLocalConn(req.GetAddr(), req.GetSessionId())
+	req := frame.Msg().Msg().(*pb.ConnectReq)
+
+	log.CtxInfof(ctx, "Client %d handleConnect channelID %d localAddr %s", cli.conf.ClientID, req.GetChannelId(), req.GetAddr())
+
+	localConn, err := NewLocalConn(ctx, cli.conn, req.GetAddr(), req.GetChannelId())
 	if err != nil {
 		recvCtx.SendResp(ctx, message.MakeConnectResp(-1, err.Error()))
 		return nil
@@ -108,13 +138,43 @@ func (cli *Client) handleConnect(ctx context.Context, recvCtx *conn.RecvMessageC
 		cli.mutex.Lock()
 		defer cli.mutex.Unlock()
 
-		cli.localConnMap[localConn.sessionID] = localConn
+		cli.localConnMap[req.GetChannelId()] = localConn
 	}()
+
+	localConn.start(ctx)
 
 	recvCtx.SendResp(ctx, message.MakeConnectResp(0, ""))
 	return nil
 }
 
+func (cli *Client) handleData(ctx context.Context, recvCtx *conn.RecvMessageContext) error {
+	frame, err := recvCtx.Frame()
+	if err != nil {
+		return err
+	}
+
+	dataNoti := frame.Msg().Msg().(*pb.DataNoti)
+
+	localConn := cli.getLocalConn(ctx, dataNoti.GetChannelId())
+	if localConn == nil {
+		log.CtxErrorf(ctx, "Client %d unknown channelID %d", cli.conf.ClientID, dataNoti.GetChannelId())
+		return nil
+	}
+
+	if err := localConn.writeData(ctx, dataNoti.Data); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (cli *Client) Close(err error) {
 	// return cli.conn.Close()
+}
+
+func (cli *Client) getLocalConn(ctx context.Context, channelID uint64) *LocalConn {
+	cli.mutex.Lock()
+	defer cli.mutex.Unlock()
+
+	return cli.localConnMap[channelID]
 }

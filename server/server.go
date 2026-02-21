@@ -44,7 +44,7 @@ func (ser *Server) start(ctx context.Context) error {
 }
 
 func (ser *Server) handleConn(ctx context.Context, rawConn net.Conn) {
-	cli, err := newClient(ctx, rawConn)
+	cli, err := newClient(ctx, ser.conf, ser.clientManager, rawConn)
 	if err != nil {
 		log.CtxErrorf(ctx, "newClient err: %v", err)
 		return

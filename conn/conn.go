@@ -2,11 +2,14 @@ package conn
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net"
 	"sync"
 	"sync/atomic"
 
 	"github.com/lakakala/luna-nt-go/message"
+	"github.com/lakakala/luna-nt-go/utils/log"
 )
 
 type Conn struct {
@@ -55,27 +58,31 @@ func (conn *Conn) start(ctx context.Context) {
 
 func (conn *Conn) readLoop(ctx context.Context) {
 
-	frame, err := message.Decode(ctx, conn.conn)
-	if err != nil {
-		conn.readChan <- makeErrorRecvMessage(err)
-		return
-	}
+	for {
+		frame, err := message.Decode(ctx, conn.conn)
+		if err != nil {
+			conn.readChan <- makeErrorRecvMessage(err)
+			return
+		}
 
-	msgID := frame.MsgID()
+		msgID := frame.MsgID()
 
-	ok := func() bool {
-		conn.mutex.Lock()
-		defer conn.mutex.Unlock()
+		log.CtxInfof(ctx, "Conn readLoop recv frame msgID %d", msgID)
 
-		_, ok := conn.sendMsgMap[msgID]
+		ok := func() bool {
+			conn.mutex.Lock()
+			defer conn.mutex.Unlock()
 
-		return ok
-	}()
+			_, ok := conn.sendMsgMap[msgID]
 
-	if ok {
-		conn.recvSendMessageResult(makeSuccessSendResult(frame))
-	} else {
-		conn.handleFrame(frame)
+			return ok
+		}()
+
+		if ok {
+			conn.recvSendMessageResult(makeSuccessSendResult(frame))
+		} else {
+			conn.handleFrame(frame)
+		}
 	}
 }
 
@@ -90,11 +97,11 @@ func (conn *Conn) writeLoop(ctx context.Context) {
 }
 
 func (conn *Conn) handleSendMessage(ctx context.Context, sendMsg *SendMessage) {
+	msgID := sendMsg.frame.MsgID()
+
 	func() {
 		conn.mutex.Lock()
 		defer conn.mutex.Unlock()
-
-		msgID := sendMsg.frame.MsgID()
 
 		conn.sendMsgMap[msgID] = sendMsg
 	}()
@@ -103,6 +110,8 @@ func (conn *Conn) handleSendMessage(ctx context.Context, sendMsg *SendMessage) {
 		conn.recvSendMessageResult(makeErrorSendResult(err))
 		return
 	}
+
+	log.CtxInfof(ctx, "Conn writeLoop send frame msgID %d", msgID)
 }
 
 func (conn *Conn) recvSendMessageResult(sendResult *SendResult) {
@@ -122,6 +131,9 @@ func (conn *Conn) recvSendMessageResult(sendResult *SendResult) {
 }
 
 func (conn *Conn) Send(ctx context.Context, msg message.Message) (message.Message, error) {
+
+	log.CtxInfof(ctx, "Conn send %d command", msg.Cmd())
+
 	msgID := conn.nextMsgID.Add(1)
 
 	frame, err := message.MakeFrame(ctx, msgID, msg)
@@ -133,26 +145,38 @@ func (conn *Conn) Send(ctx context.Context, msg message.Message) (message.Messag
 
 	conn.writeChan <- sendMsg
 
-	select {
-	case resp := <-respChan:
-		if resp.err != nil {
-			return nil, resp.err
+	msgType := message.MsgType(msg.Cmd())
+	if msgType == message.MessageTypeReq {
+		select {
+		case resp := <-respChan:
+			if resp.err != nil {
+				return nil, resp.err
+			}
+			return resp.frame.Msg(), nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
-		return resp.frame.Msg(), nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	} else if msgType == message.MessageTypeNoti {
+		return nil, nil
+	} else if msgType == message.MessageTypeResp {
+		return nil, nil
+	} else {
+		return nil, errors.New(fmt.Sprintf("unknown msgType %d", msgType))
 	}
 }
 
-func (conn *Conn) Accept() (*RecvMessageContext, error) {
+func (conn *Conn) Accept(ctx context.Context) (*RecvMessageContext, error) {
 	recvMsg, ok := <-conn.readChan
 	if !ok {
 		return nil, nil
 	}
 
-	if recvMsg.err != nil {
-		return nil, recvMsg.err
+	frame, err := recvMsg.Frame()
+	if err != nil {
+		return nil, err
 	}
+
+	log.CtxInfof(ctx, "Conn accept %d command", frame.Command())
 
 	return recvMsg, nil
 }
@@ -172,6 +196,10 @@ func makeErrorSendResult(err error) *SendResult {
 	return &SendResult{
 		err: err,
 	}
+}
+
+func (sendResult *SendResult) Frame() (*message.Frame, error) {
+	return sendResult.frame, sendResult.err
 }
 
 type SendMessage struct {
@@ -208,11 +236,14 @@ func makeErrorRecvMessage(err error) *RecvMessageContext {
 	}
 }
 
-func (recvCtx *RecvMessageContext) Frame() *message.Frame {
-	return recvCtx.frame
+func (recvCtx *RecvMessageContext) Frame() (*message.Frame, error) {
+	return recvCtx.frame, recvCtx.err
 }
 
 func (recvCtx *RecvMessageContext) SendResp(ctx context.Context, resp message.Message) error {
+
+	log.CtxInfof(ctx, "Conn sendResp %d command", resp.Cmd())
+
 	frame, err := message.MakeFrame(ctx, recvCtx.frame.MsgID(), resp)
 	if err != nil {
 		return err

@@ -18,9 +18,9 @@ type ClientConfig struct {
 }
 
 type Config struct {
-	Addr    string          `yaml:"addr"`
-	Token   string          `yaml:"token"`
-	Clients []*ClientConfig `yaml:"clients"`
+	Addr    string                   `yaml:"addr"`
+	Token   string                   `yaml:"token"`
+	Clients map[uint64]*ClientConfig `yaml:"clients"`
 }
 
 func Parse(path string) (*Config, error) {
