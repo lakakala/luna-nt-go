@@ -181,6 +181,7 @@ type ConnectReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ChannelId     *uint64                `protobuf:"varint,1,opt,name=channel_id,json=channelId,proto3,oneof" json:"channel_id,omitempty"`
 	Addr          *string                `protobuf:"bytes,2,opt,name=addr,proto3,oneof" json:"addr,omitempty"`
+	WindowSize    *uint64                `protobuf:"varint,3,opt,name=window_size,json=windowSize,proto3,oneof" json:"window_size,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -227,6 +228,13 @@ func (x *ConnectReq) GetAddr() string {
 		return *x.Addr
 	}
 	return ""
+}
+
+func (x *ConnectReq) GetWindowSize() uint64 {
+	if x != nil && x.WindowSize != nil {
+		return *x.WindowSize
+	}
+	return 0
 }
 
 type ConnectResp struct {
@@ -413,27 +421,27 @@ func (x *CloseChannelResp) GetBaseResp() *BaseResp {
 	return nil
 }
 
-type DataWindowNoti struct {
+type CloseChannelReadHalfReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Size          *uint32                `protobuf:"varint,1,opt,name=size,proto3,oneof" json:"size,omitempty"`
+	ChannelId     *uint64                `protobuf:"varint,1,opt,name=channel_id,json=channelId,proto3,oneof" json:"channel_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DataWindowNoti) Reset() {
-	*x = DataWindowNoti{}
+func (x *CloseChannelReadHalfReq) Reset() {
+	*x = CloseChannelReadHalfReq{}
 	mi := &file_message_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DataWindowNoti) String() string {
+func (x *CloseChannelReadHalfReq) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DataWindowNoti) ProtoMessage() {}
+func (*CloseChannelReadHalfReq) ProtoMessage() {}
 
-func (x *DataWindowNoti) ProtoReflect() protoreflect.Message {
+func (x *CloseChannelReadHalfReq) ProtoReflect() protoreflect.Message {
 	mi := &file_message_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -445,14 +453,198 @@ func (x *DataWindowNoti) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DataWindowNoti.ProtoReflect.Descriptor instead.
-func (*DataWindowNoti) Descriptor() ([]byte, []int) {
+// Deprecated: Use CloseChannelReadHalfReq.ProtoReflect.Descriptor instead.
+func (*CloseChannelReadHalfReq) Descriptor() ([]byte, []int) {
 	return file_message_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *DataWindowNoti) GetSize() uint32 {
-	if x != nil && x.Size != nil {
-		return *x.Size
+func (x *CloseChannelReadHalfReq) GetChannelId() uint64 {
+	if x != nil && x.ChannelId != nil {
+		return *x.ChannelId
+	}
+	return 0
+}
+
+type CloseChannelReadHalfResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BaseResp      *BaseResp              `protobuf:"bytes,1,opt,name=base_resp,json=baseResp,proto3,oneof" json:"base_resp,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CloseChannelReadHalfResp) Reset() {
+	*x = CloseChannelReadHalfResp{}
+	mi := &file_message_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CloseChannelReadHalfResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CloseChannelReadHalfResp) ProtoMessage() {}
+
+func (x *CloseChannelReadHalfResp) ProtoReflect() protoreflect.Message {
+	mi := &file_message_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CloseChannelReadHalfResp.ProtoReflect.Descriptor instead.
+func (*CloseChannelReadHalfResp) Descriptor() ([]byte, []int) {
+	return file_message_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *CloseChannelReadHalfResp) GetBaseResp() *BaseResp {
+	if x != nil {
+		return x.BaseResp
+	}
+	return nil
+}
+
+type CloseChannelWriteHalfReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ChannelId     *uint64                `protobuf:"varint,1,opt,name=channel_id,json=channelId,proto3,oneof" json:"channel_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CloseChannelWriteHalfReq) Reset() {
+	*x = CloseChannelWriteHalfReq{}
+	mi := &file_message_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CloseChannelWriteHalfReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CloseChannelWriteHalfReq) ProtoMessage() {}
+
+func (x *CloseChannelWriteHalfReq) ProtoReflect() protoreflect.Message {
+	mi := &file_message_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CloseChannelWriteHalfReq.ProtoReflect.Descriptor instead.
+func (*CloseChannelWriteHalfReq) Descriptor() ([]byte, []int) {
+	return file_message_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *CloseChannelWriteHalfReq) GetChannelId() uint64 {
+	if x != nil && x.ChannelId != nil {
+		return *x.ChannelId
+	}
+	return 0
+}
+
+type CloseChannelWriteHalfResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BaseResp      *BaseResp              `protobuf:"bytes,1,opt,name=base_resp,json=baseResp,proto3,oneof" json:"base_resp,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CloseChannelWriteHalfResp) Reset() {
+	*x = CloseChannelWriteHalfResp{}
+	mi := &file_message_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CloseChannelWriteHalfResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CloseChannelWriteHalfResp) ProtoMessage() {}
+
+func (x *CloseChannelWriteHalfResp) ProtoReflect() protoreflect.Message {
+	mi := &file_message_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CloseChannelWriteHalfResp.ProtoReflect.Descriptor instead.
+func (*CloseChannelWriteHalfResp) Descriptor() ([]byte, []int) {
+	return file_message_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *CloseChannelWriteHalfResp) GetBaseResp() *BaseResp {
+	if x != nil {
+		return x.BaseResp
+	}
+	return nil
+}
+
+type ChannelWindowUpdateNoti struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ChannelId     *uint64                `protobuf:"varint,1,opt,name=channel_id,json=channelId,proto3,oneof" json:"channel_id,omitempty"`
+	WindowSize    *uint64                `protobuf:"varint,2,opt,name=window_size,json=windowSize,proto3,oneof" json:"window_size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ChannelWindowUpdateNoti) Reset() {
+	*x = ChannelWindowUpdateNoti{}
+	mi := &file_message_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChannelWindowUpdateNoti) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChannelWindowUpdateNoti) ProtoMessage() {}
+
+func (x *ChannelWindowUpdateNoti) ProtoReflect() protoreflect.Message {
+	mi := &file_message_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChannelWindowUpdateNoti.ProtoReflect.Descriptor instead.
+func (*ChannelWindowUpdateNoti) Descriptor() ([]byte, []int) {
+	return file_message_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ChannelWindowUpdateNoti) GetChannelId() uint64 {
+	if x != nil && x.ChannelId != nil {
+		return *x.ChannelId
+	}
+	return 0
+}
+
+func (x *ChannelWindowUpdateNoti) GetWindowSize() uint64 {
+	if x != nil && x.WindowSize != nil {
+		return *x.WindowSize
 	}
 	return 0
 }
@@ -479,14 +671,17 @@ const file_message_proto_rawDesc = "" +
 	"\bAuthResp\x12+\n" +
 	"\tbase_resp\x18\x01 \x01(\v2\t.BaseRespH\x00R\bbaseResp\x88\x01\x01B\f\n" +
 	"\n" +
-	"_base_resp\"a\n" +
+	"_base_resp\"\x97\x01\n" +
 	"\n" +
 	"ConnectReq\x12\"\n" +
 	"\n" +
 	"channel_id\x18\x01 \x01(\x04H\x00R\tchannelId\x88\x01\x01\x12\x17\n" +
-	"\x04addr\x18\x02 \x01(\tH\x01R\x04addr\x88\x01\x01B\r\n" +
+	"\x04addr\x18\x02 \x01(\tH\x01R\x04addr\x88\x01\x01\x12$\n" +
+	"\vwindow_size\x18\x03 \x01(\x04H\x02R\n" +
+	"windowSize\x88\x01\x01B\r\n" +
 	"\v_channel_idB\a\n" +
-	"\x05_addr\"H\n" +
+	"\x05_addrB\x0e\n" +
+	"\f_window_size\"H\n" +
 	"\vConnectResp\x12+\n" +
 	"\tbase_resp\x18\x01 \x01(\v2\t.BaseRespH\x00R\bbaseResp\x88\x01\x01B\f\n" +
 	"\n" +
@@ -504,10 +699,30 @@ const file_message_proto_rawDesc = "" +
 	"\x10CloseChannelResp\x12+\n" +
 	"\tbase_resp\x18\x01 \x01(\v2\t.BaseRespH\x00R\bbaseResp\x88\x01\x01B\f\n" +
 	"\n" +
-	"_base_resp\"2\n" +
-	"\x0eDataWindowNoti\x12\x17\n" +
-	"\x04size\x18\x01 \x01(\rH\x00R\x04size\x88\x01\x01B\a\n" +
-	"\x05_sizeB\x06Z\x04./pbb\x06proto3"
+	"_base_resp\"L\n" +
+	"\x17CloseChannelReadHalfReq\x12\"\n" +
+	"\n" +
+	"channel_id\x18\x01 \x01(\x04H\x00R\tchannelId\x88\x01\x01B\r\n" +
+	"\v_channel_id\"U\n" +
+	"\x18CloseChannelReadHalfResp\x12+\n" +
+	"\tbase_resp\x18\x01 \x01(\v2\t.BaseRespH\x00R\bbaseResp\x88\x01\x01B\f\n" +
+	"\n" +
+	"_base_resp\"M\n" +
+	"\x18CloseChannelWriteHalfReq\x12\"\n" +
+	"\n" +
+	"channel_id\x18\x01 \x01(\x04H\x00R\tchannelId\x88\x01\x01B\r\n" +
+	"\v_channel_id\"V\n" +
+	"\x19CloseChannelWriteHalfResp\x12+\n" +
+	"\tbase_resp\x18\x01 \x01(\v2\t.BaseRespH\x00R\bbaseResp\x88\x01\x01B\f\n" +
+	"\n" +
+	"_base_resp\"\x82\x01\n" +
+	"\x17ChannelWindowUpdateNoti\x12\"\n" +
+	"\n" +
+	"channel_id\x18\x01 \x01(\x04H\x00R\tchannelId\x88\x01\x01\x12$\n" +
+	"\vwindow_size\x18\x02 \x01(\x04H\x01R\n" +
+	"windowSize\x88\x01\x01B\r\n" +
+	"\v_channel_idB\x0e\n" +
+	"\f_window_sizeB\x06Z\x04./pbb\x06proto3"
 
 var (
 	file_message_proto_rawDescOnce sync.Once
@@ -521,27 +736,33 @@ func file_message_proto_rawDescGZIP() []byte {
 	return file_message_proto_rawDescData
 }
 
-var file_message_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_message_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_message_proto_goTypes = []any{
-	(*BaseResp)(nil),         // 0: BaseResp
-	(*AuthReq)(nil),          // 1: AuthReq
-	(*AuthResp)(nil),         // 2: AuthResp
-	(*ConnectReq)(nil),       // 3: ConnectReq
-	(*ConnectResp)(nil),      // 4: ConnectResp
-	(*DataNoti)(nil),         // 5: DataNoti
-	(*CloseChannelReq)(nil),  // 6: CloseChannelReq
-	(*CloseChannelResp)(nil), // 7: CloseChannelResp
-	(*DataWindowNoti)(nil),   // 8: DataWindowNoti
+	(*BaseResp)(nil),                  // 0: BaseResp
+	(*AuthReq)(nil),                   // 1: AuthReq
+	(*AuthResp)(nil),                  // 2: AuthResp
+	(*ConnectReq)(nil),                // 3: ConnectReq
+	(*ConnectResp)(nil),               // 4: ConnectResp
+	(*DataNoti)(nil),                  // 5: DataNoti
+	(*CloseChannelReq)(nil),           // 6: CloseChannelReq
+	(*CloseChannelResp)(nil),          // 7: CloseChannelResp
+	(*CloseChannelReadHalfReq)(nil),   // 8: CloseChannelReadHalfReq
+	(*CloseChannelReadHalfResp)(nil),  // 9: CloseChannelReadHalfResp
+	(*CloseChannelWriteHalfReq)(nil),  // 10: CloseChannelWriteHalfReq
+	(*CloseChannelWriteHalfResp)(nil), // 11: CloseChannelWriteHalfResp
+	(*ChannelWindowUpdateNoti)(nil),   // 12: ChannelWindowUpdateNoti
 }
 var file_message_proto_depIdxs = []int32{
 	0, // 0: AuthResp.base_resp:type_name -> BaseResp
 	0, // 1: ConnectResp.base_resp:type_name -> BaseResp
 	0, // 2: CloseChannelResp.base_resp:type_name -> BaseResp
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	0, // 3: CloseChannelReadHalfResp.base_resp:type_name -> BaseResp
+	0, // 4: CloseChannelWriteHalfResp.base_resp:type_name -> BaseResp
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_message_proto_init() }
@@ -558,13 +779,17 @@ func file_message_proto_init() {
 	file_message_proto_msgTypes[6].OneofWrappers = []any{}
 	file_message_proto_msgTypes[7].OneofWrappers = []any{}
 	file_message_proto_msgTypes[8].OneofWrappers = []any{}
+	file_message_proto_msgTypes[9].OneofWrappers = []any{}
+	file_message_proto_msgTypes[10].OneofWrappers = []any{}
+	file_message_proto_msgTypes[11].OneofWrappers = []any{}
+	file_message_proto_msgTypes[12].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_message_proto_rawDesc), len(file_message_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

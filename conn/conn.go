@@ -25,7 +25,6 @@ type Conn struct {
 
 func NewConnFromRawConn(ctx context.Context, rawConn net.Conn) (*Conn, error) {
 	nextMsgID := &atomic.Uint64{}
-	nextMsgID.Store(1)
 
 	conn := &Conn{
 		nextMsgID: nextMsgID,
@@ -33,8 +32,8 @@ func NewConnFromRawConn(ctx context.Context, rawConn net.Conn) (*Conn, error) {
 
 		sendMsgMap: make(map[uint64]*SendMessage),
 
-		readChan:  make(chan *RecvMessageContext, 10),
-		writeChan: make(chan *SendMessage, 10),
+		readChan:  make(chan *RecvMessageContext, 10000),
+		writeChan: make(chan *SendMessage, 10000),
 	}
 
 	conn.start(ctx)
@@ -69,20 +68,26 @@ func (conn *Conn) readLoop(ctx context.Context) {
 
 		log.CtxInfof(ctx, "Conn readLoop recv frame msgID %d", msgID)
 
-		ok := func() bool {
-			conn.mutex.Lock()
-			defer conn.mutex.Unlock()
+		msgType := message.MsgType(frame.Command())
+		if msgType == message.MessageTypeResp {
+			ok := func() bool {
+				conn.mutex.Lock()
+				defer conn.mutex.Unlock()
 
-			_, ok := conn.sendMsgMap[msgID]
+				_, ok := conn.sendMsgMap[msgID]
 
-			return ok
-		}()
+				return ok
+			}()
 
-		if ok {
+			if !ok {
+				log.CtxErrorf(ctx, "Conn readLoop msgID %d can not find req", msgID)
+			}
+
 			conn.recvSendMessageResult(makeSuccessSendResult(frame))
 		} else {
 			conn.handleFrame(frame)
 		}
+
 	}
 }
 

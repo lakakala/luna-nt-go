@@ -111,14 +111,14 @@ func init() {
 		return data, nil
 	}, MessageTypeResp)
 
-	registerCodec(COMMAND_DATA, func(ctx context.Context, data []byte) (Message, error) {
+	registerCodec(COMMAND_DATA_NOTI, func(ctx context.Context, data []byte) (Message, error) {
 		var msg = &pb.DataNoti{}
 
 		if err := proto.Unmarshal(data, msg); err != nil {
 			return nil, err
 		}
 
-		return NewPbMessage(COMMAND_DATA, msg), nil
+		return NewPbMessage(COMMAND_DATA_NOTI, msg), nil
 	}, func(ctx context.Context, msg Message) ([]byte, error) {
 		dataMsg := msg.Msg().(*pb.DataNoti)
 
@@ -167,6 +167,25 @@ func init() {
 
 		return data, nil
 	}, MessageTypeResp)
+
+	registerCodec(COMMAND_CHANNEL_WINDOW_UPDATE_NOTI, func(ctx context.Context, data []byte) (Message, error) {
+		var resp = &pb.ChannelWindowUpdateNoti{}
+
+		if err := proto.Unmarshal(data, resp); err != nil {
+			return nil, err
+		}
+
+		return NewPbMessage(COMMAND_CHANNEL_WINDOW_UPDATE_NOTI, resp), nil
+	}, func(ctx context.Context, msg Message) ([]byte, error) {
+		resp := msg.Msg().(*pb.ChannelWindowUpdateNoti)
+
+		data, err := proto.Marshal(resp)
+		if err != nil {
+			return nil, err
+		}
+
+		return data, nil
+	}, MessageTypeNoti)
 
 }
 

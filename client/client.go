@@ -82,7 +82,7 @@ func (cli *Client) start(ctx context.Context) {
 			case message.COMMAND_CONNECT_REQ:
 				return cli.handleConnect(ctx, recvCtx)
 
-			case message.COMMAND_DATA:
+			case message.COMMAND_DATA_NOTI:
 				return cli.handleData(ctx, recvCtx)
 
 			default:

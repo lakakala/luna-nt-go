@@ -84,7 +84,7 @@ func (c *Client) start(ctx context.Context) error {
 			switch frame.Command() {
 			case message.COMMAND_AUTH_REQ:
 				return c.handleAuthReq(ctx, recvCtx)
-			case message.COMMAND_DATA:
+			case message.COMMAND_DATA_NOTI:
 				return c.handleData(ctx, recvCtx)
 			default:
 				return errors.New(fmt.Sprintf("unknown command %d", frame.Command()))

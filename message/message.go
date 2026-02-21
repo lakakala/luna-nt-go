@@ -5,13 +5,14 @@ import "google.golang.org/protobuf/proto"
 type CommandType uint16
 
 const (
-	COMMAND_AUTH_REQ           CommandType = 1
-	COMMAND_AUTH_RESP          CommandType = 2
-	COMMAND_CONNECT_REQ        CommandType = 3
-	COMMAND_CONNECT_RESP       CommandType = 4
-	COMMAND_DATA               CommandType = 5
-	COMMAND_CHANNEL_CLOSE_REQ  CommandType = 6
-	COMMAND_CHANNEL_CLOSE_RESP CommandType = 7
+	COMMAND_AUTH_REQ                   CommandType = 1
+	COMMAND_AUTH_RESP                  CommandType = 2
+	COMMAND_CONNECT_REQ                CommandType = 3
+	COMMAND_CONNECT_RESP               CommandType = 4
+	COMMAND_DATA_NOTI                  CommandType = 5
+	COMMAND_CHANNEL_CLOSE_REQ          CommandType = 6
+	COMMAND_CHANNEL_CLOSE_RESP         CommandType = 7
+	COMMAND_CHANNEL_WINDOW_UPDATE_NOTI CommandType = 8
 )
 
 type Message interface {

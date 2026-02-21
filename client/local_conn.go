@@ -33,7 +33,7 @@ func NewLocalConn(ctx context.Context, remoteConn *conn.Conn, addr string, chann
 		channelID: channelID,
 		conn:      remoteConn,
 		windows:   100,
-		writeChan: make(chan []byte, 10),
+		writeChan: make(chan []byte, 10000),
 	}
 
 	return localConn, nil
@@ -61,7 +61,7 @@ func (lc *LocalConn) start(ctx context.Context) {
 
 		for {
 
-			buf := make([]byte, 100)
+			buf := make([]byte, 1024*1000)
 			n, err := lc.localConn.Read(buf)
 			data := buf[:n]
 

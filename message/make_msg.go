@@ -40,7 +40,7 @@ func MakeDataNoti(channelID uint64, data []byte) Message {
 	dataNoti := pb.DataNoti{}
 	dataNoti.ChannelId = &channelID
 	dataNoti.Data = data
-	return NewPbMessage(COMMAND_DATA, &dataNoti)
+	return NewPbMessage(COMMAND_DATA_NOTI, &dataNoti)
 }
 
 func MakeChannelCloseReq(channelID uint64) Message {
@@ -57,4 +57,11 @@ func MakeChannelCloseResp(code int32, msg string) Message {
 	}
 
 	return NewPbMessage(COMMAND_CONNECT_RESP, &channelCloseResp)
+}
+
+func MakeChanelWindowUpdateNoti(channelID uint64, windowSize uint64) Message {
+	noti := pb.ChannelWindowUpdateNoti{}
+	noti.ChannelId = &channelID
+	noti.WindowSize = &windowSize
+	return NewPbMessage(COMMAND_CHANNEL_WINDOW_UPDATE_NOTI, &noti)
 }

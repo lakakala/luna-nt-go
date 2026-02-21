@@ -18,8 +18,9 @@ message AuthResp {
 }
 
 message ConnectReq {
-  optional uint64 channel_id = 1;
-  optional string addr       = 2;
+  optional uint64 channel_id  = 1;
+  optional string addr        = 2;
+  optional uint64 window_size = 3;
 }
 
 message ConnectResp {
@@ -28,26 +29,34 @@ message ConnectResp {
 
 message DataNoti {
   optional uint64 channel_id = 1;
-  optional bytes data = 2;
+  optional bytes  data       = 2;
+}
+
+message CloseChannelReq {
+  optional uint64 channel_id = 1;
+}
+
+message CloseChannelResp {
+  optional BaseResp base_resp = 1;
 }
 
 message CloseChannelReadHalfReq {
   optional uint64 channel_id = 1;
 }
 
-message CloseChannelReadResp {
+message CloseChannelReadHalfResp {
   optional BaseResp base_resp = 1;
 }
 
-message CloseChannelWriteReq {
+message CloseChannelWriteHalfReq {
   optional uint64 channel_id = 1;
 }
 
-message CloseChannelWriteResp {
+message CloseChannelWriteHalfResp {
   optional BaseResp base_resp = 1;
 }
 
-
-message DataWindowNoti {
-    optional uint32 size = 1;
+message ChannelWindowUpdateNoti {
+  optional uint64 channel_id = 1;
+  optional uint64 window_size = 2;
 }
