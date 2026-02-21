@@ -13,27 +13,37 @@ type LocalConn struct {
 	localConn net.Conn
 	conn      *conn.Conn
 	channelID uint64
-	windows   uint64
+
 	writeChan chan []byte
+
+	batchSize uint64
+
+	recvWindowManager *conn.ChannelRecvWindowManager
+	sendWindowManager *conn.ChannelSendWindowManager
 }
 
 func (lc *LocalConn) GetChannelID() uint64 {
 	return lc.channelID
 }
 
-func NewLocalConn(ctx context.Context, remoteConn *conn.Conn, addr string, channelID uint64) (*LocalConn, error) {
+func NewLocalConn(ctx context.Context, remoteConn *conn.Conn, addr string, channelID uint64, windowSize uint64, batchSize uint64) (*LocalConn, error) {
 
-	conn, err := net.Dial("tcp", addr)
+	connection, err := net.Dial("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
 
 	localConn := &LocalConn{
-		localConn: conn,
+		localConn: connection,
 		channelID: channelID,
 		conn:      remoteConn,
-		windows:   100,
-		writeChan: make(chan []byte, 10000),
+
+		writeChan: make(chan []byte, windowSize),
+
+		batchSize: batchSize,
+
+		recvWindowManager: conn.NewChannelRecvWindowManager(windowSize),
+		sendWindowManager: conn.NewChannelSendWindowManager(windowSize),
 	}
 
 	return localConn, nil
@@ -43,25 +53,12 @@ func (lc *LocalConn) start(ctx context.Context) {
 
 	go func() {
 
-		for data := range lc.writeChan {
-
-			n, err := lc.localConn.Write(data)
-			if err != nil {
-				log.CtxErrorf(ctx, "LocalConn channelID %d write data failed err %s", lc.channelID, err)
-				break
-			}
-
-			log.CtxInfof(ctx, "LocalConn %d write data %v", lc.channelID, data)
-
-			log.CtxInfof(ctx, "LocalConn channelID %d recv %d write %d byte", lc.channelID, len(data), n)
-		}
-	}()
-
-	go func() {
-
 		for {
 
-			buf := make([]byte, 1024*1000)
+			lc.sendWindowManager.Acquire()
+
+			buf := make([]byte, lc.batchSize)
+
 			n, err := lc.localConn.Read(buf)
 			data := buf[:n]
 
@@ -79,6 +76,31 @@ func (lc *LocalConn) start(ctx context.Context) {
 
 		lc.conn.Send(ctx, message.MakeChannelCloseReq(lc.GetChannelID()))
 	}()
+
+	go func() {
+
+		for data := range lc.writeChan {
+
+			n, err := lc.localConn.Write(data)
+			if err != nil {
+				log.CtxErrorf(ctx, "LocalConn channelID %d write data failed err %s", lc.channelID, err)
+				break
+			}
+
+			needAckWindowSize := lc.recvWindowManager.Release(0)
+			if needAckWindowSize > 0 {
+				_, err := lc.conn.Send(ctx, message.MakeChanelWindowUpdateNoti(lc.channelID, needAckWindowSize))
+				if err != nil {
+					log.CtxErrorf(ctx, "LocalConn chnnelID %d send window update failed err %s", lc.channelID, err)
+					return
+				}
+
+				log.CtxInfof(ctx, "LocalConn channelID %d send window update %d", lc.channelID, needAckWindowSize)
+			}
+
+			log.CtxInfof(ctx, "LocalConn channelID %d recv %d write %d byte", lc.channelID, len(data), n)
+		}
+	}()
 }
 
 func (lc *LocalConn) Close() {
@@ -89,4 +111,9 @@ func (lc *LocalConn) Close() {
 func (lc *LocalConn) writeData(ctx context.Context, data []byte) error {
 	lc.writeChan <- data
 	return nil
+}
+
+func (lc *LocalConn) releaseWindow(ctx context.Context, ackWindowSize uint64) {
+	log.CtxInfof(ctx, "LocalConn %d release window size %d", lc.channelID, ackWindowSize)
+	lc.sendWindowManager.Release(ackWindowSize)
 }

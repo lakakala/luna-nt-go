@@ -84,8 +84,13 @@ func (c *Client) start(ctx context.Context) error {
 			switch frame.Command() {
 			case message.COMMAND_AUTH_REQ:
 				return c.handleAuthReq(ctx, recvCtx)
+
 			case message.COMMAND_DATA_NOTI:
 				return c.handleData(ctx, recvCtx)
+
+			case message.COMMAND_CHANNEL_WINDOW_UPDATE_NOTI:
+				return c.handleChannelWindowUpdate(ctx, recvCtx)
+
 			default:
 				return errors.New(fmt.Sprintf("unknown command %d", frame.Command()))
 			}
@@ -163,10 +168,29 @@ func (c *Client) handleData(ctx context.Context, recvCtx *conn.RecvMessageContex
 	return nil
 }
 
-func (c *Client) Connect(ctx context.Context, remoteConn net.Conn, localAddr string) error {
+func (c *Client) handleChannelWindowUpdate(ctx context.Context, recvCtx *conn.RecvMessageContext) error {
+	frame, err := recvCtx.Frame()
+	if err != nil {
+		return err
+	}
+	windowUpdateNoti := frame.Msg().Msg().(*pb.ChannelWindowUpdateNoti)
+
+	channelID := windowUpdateNoti.GetChannelId()
+
+	channel, err := c.channelManager.GetChannel(channelID)
+	if err != nil {
+		return err
+	}
+
+	channel.Release(ctx, windowUpdateNoti.GetWindowSize())
+
+	return nil
+}
+
+func (c *Client) connect(ctx context.Context, remoteConn net.Conn, localAddr string) error {
 
 	channelID := c.channelManager.NextChannelID()
-	resp, err := c.conn.Send(ctx, message.MakeConnectReq(channelID, localAddr))
+	resp, err := c.conn.Send(ctx, message.MakeConnectReq(channelID, localAddr, conn.BATCH_SIZE, conn.WINDOW_SIZE))
 	if err != nil {
 		return err
 	}
@@ -178,7 +202,7 @@ func (c *Client) Connect(ctx context.Context, remoteConn net.Conn, localAddr str
 		return errors.New(connectResp.BaseResp.GetMsg())
 	}
 
-	channel := NewChannel(ctx, c.channelManager, channelID, remoteConn, c.conn)
+	channel := NewChannel(ctx, c.channelManager, channelID, conn.BATCH_SIZE, conn.WINDOW_SIZE, remoteConn, c.conn)
 
 	log.CtxInfof(ctx, "Client %d alloc channel success channelID %d", c.ClientID(), channel.ChannelID())
 
@@ -254,7 +278,7 @@ func (cl *ClientListener) Start(ctx context.Context) {
 }
 
 func (cl *ClientListener) handleConn(ctx context.Context, conn net.Conn) {
-	if err := cl.client.Connect(ctx, conn, cl.localAddr); err != nil {
+	if err := cl.client.connect(ctx, conn, cl.localAddr); err != nil {
 		log.CtxErrorf(ctx, "cl.client.Connect err: %v", err)
 		return
 	}

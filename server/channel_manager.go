@@ -58,24 +58,28 @@ type Channel struct {
 	channelID      uint64
 	remoteConn     net.Conn
 
-	writeChan      chan []byte
-	windowSize     uint64
-	currWindowSize uint64
+	writeChan chan []byte
 
-	batchSize uint64
+	sendWindowManager *conn.ChannelSendWindowManager
+	recvWindowManager *conn.ChannelRecvWindowManager
+	batchSize         uint64
 }
 
-func NewChannel(ctx context.Context, channelManager *ChannelManager, channelID uint64, batchSize uint64, windowSize uint64, remoteConn net.Conn, conn *conn.Conn) *Channel {
+func NewChannel(ctx context.Context, channelManager *ChannelManager, channelID uint64, batchSize uint64, windowSize uint64, remoteConn net.Conn, connection *conn.Conn) *Channel {
+
+	sendWindowManager := conn.NewChannelSendWindowManager(windowSize)
+	recvWindowManager := conn.NewChannelRecvWindowManager(windowSize)
+
 	channel := &Channel{
 		mutex:          sync.Mutex{},
-		conn:           conn,
+		conn:           connection,
 		channelManager: channelManager,
 		channelID:      channelID,
 		remoteConn:     remoteConn,
 
-		writeChan:      make(chan []byte, windowSize),
-		windowSize:     windowSize,
-		currWindowSize: 0,
+		writeChan:         make(chan []byte, windowSize),
+		sendWindowManager: sendWindowManager,
+		recvWindowManager: recvWindowManager,
 
 		batchSize: batchSize,
 	}
@@ -88,11 +92,6 @@ func (c *Channel) ChannelID() uint64 {
 }
 
 func (c *Channel) recvData(ctx context.Context, data []byte) error {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	c.windowSize += 1
-
 	c.writeChan <- data
 	return nil
 }
@@ -102,6 +101,8 @@ func (c *Channel) start(ctx context.Context) {
 	go func() {
 
 		for {
+
+			// c.sendWindowManager.Acquire()
 
 			buf := make([]byte, c.batchSize)
 
@@ -139,62 +140,27 @@ func (c *Channel) start(ctx context.Context) {
 
 			log.CtxInfof(ctx, "Channel %d remoteConn recv %d write %d byte", c.channelID, len(data), n)
 
-			var needAckWindowSize uint64
-			func() {
+			// needAckWindowSize := c.recvWindowManager.Release(0)
+			// if needAckWindowSize > 0 {
+			// 	_, err := c.conn.Send(ctx, message.MakeChanelWindowUpdateNoti(c.channelID, needAckWindowSize))
+			// 	if err != nil {
+			// 		log.CtxErrorf(ctx, "Channel chnnelID %d send window update failed err %s", c.ChannelID(), err)
+			// 		return
+			// 	}
 
-				c.mutex.Lock()
-				defer c.mutex.Unlock()
-
-				needAckWindowSize = c.currWindowSize
-				if needAckWindowSize > c.windowSize/2 {
-					c.currWindowSize = 0
-				}
-			}()
-
-			if needAckWindowSize > 0 {
-				_, err := c.conn.Send(ctx, message.MakeChanelWindowUpdateNoti(c.channelID, needAckWindowSize))
-				if err != nil {
-					log.CtxErrorf(ctx, "Channel chnnelID %d send window update failed err %s", c.ChannelID(), err)
-					return
-				}
-			}
+			// 	log.CtxInfof(ctx, "Channel %d send window update %d", c.channelID, needAckWindowSize)
+			// }
 
 		}
 	}()
 
 }
 
+func (c *Channel) Release(ctx context.Context, ackWindowSize uint64) {
+	log.CtxInfof(ctx, "Channel %d release window size %d", c.channelID, ackWindowSize)
+	// c.sendWindowManager.Release(ackWindowSize)
+}
+
 func (c *Channel) close(ctx context.Context) {
 
-}
-
-type ChannelWindowManager struct {
-	mutex          sync.Mutex
-	cond           *sync.Cond
-	currWindowSize uint64
-	windowSize     uint64
-}
-
-func NewChannelWindowManager(windowSize uint64) *ChannelWindowManager {
-	mutex := sync.Mutex{}
-	return &ChannelWindowManager{
-		mutex:          mutex,
-		cond:           sync.NewCond(mutex),
-		currWindowSize: 0,
-		windowSize:     windowSize,
-	}
-}
-
-func (c *ChannelWindowManager) Acquire() {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	return
-}
-
-func (c *ChannelWindowManager) Release(ackWindowSize uint64) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	c.currWindowSize -= ackWindowSize
 }

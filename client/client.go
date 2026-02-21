@@ -85,6 +85,9 @@ func (cli *Client) start(ctx context.Context) {
 			case message.COMMAND_DATA_NOTI:
 				return cli.handleData(ctx, recvCtx)
 
+			case message.COMMAND_CHANNEL_WINDOW_UPDATE_NOTI:
+				return cli.handleChannelWindowUpdate(ctx, recvCtx)
+
 			default:
 				return errors.New(fmt.Sprintf("unknown command %d", frame.Command()))
 			}
@@ -128,7 +131,7 @@ func (cli *Client) handleConnect(ctx context.Context, recvCtx *conn.RecvMessageC
 
 	log.CtxInfof(ctx, "Client %d handleConnect channelID %d localAddr %s", cli.conf.ClientID, req.GetChannelId(), req.GetAddr())
 
-	localConn, err := NewLocalConn(ctx, cli.conn, req.GetAddr(), req.GetChannelId())
+	localConn, err := NewLocalConn(ctx, cli.conn, req.GetAddr(), req.GetChannelId(), req.GetWindowSize(), req.GetBatchSize())
 	if err != nil {
 		recvCtx.SendResp(ctx, message.MakeConnectResp(-1, err.Error()))
 		return nil
@@ -164,6 +167,25 @@ func (cli *Client) handleData(ctx context.Context, recvCtx *conn.RecvMessageCont
 	if err := localConn.writeData(ctx, dataNoti.Data); err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (cli *Client) handleChannelWindowUpdate(ctx context.Context, recvCtx *conn.RecvMessageContext) error {
+	frame, err := recvCtx.Frame()
+	if err != nil {
+		return err
+	}
+
+	windowUpdateNoti := frame.Msg().Msg().(*pb.ChannelWindowUpdateNoti)
+
+	localConn := cli.getLocalConn(ctx, windowUpdateNoti.GetChannelId())
+	if localConn == nil {
+		log.CtxErrorf(ctx, "Client %d unknown channelID %d", cli.conf.ClientID, windowUpdateNoti.GetChannelId())
+		return nil
+	}
+
+	localConn.releaseWindow(ctx, windowUpdateNoti.GetWindowSize())
 
 	return nil
 }

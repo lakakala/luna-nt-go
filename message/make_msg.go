@@ -19,10 +19,12 @@ func MakeAuthResp(code int32, msg string) Message {
 	return NewPbMessage(COMMAND_AUTH_RESP, &authResp)
 }
 
-func MakeConnectReq(channelID uint64, localAddr string) Message {
+func MakeConnectReq(channelID uint64, localAddr string, batchSize uint64, windowSize uint64) Message {
 	connectReq := pb.ConnectReq{}
 	connectReq.Addr = &localAddr
 	connectReq.ChannelId = &channelID
+	connectReq.BatchSize = &batchSize
+	connectReq.WindowSize = &windowSize
 	return NewPbMessage(COMMAND_CONNECT_REQ, &connectReq)
 }
 

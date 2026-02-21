@@ -182,6 +182,7 @@ type ConnectReq struct {
 	ChannelId     *uint64                `protobuf:"varint,1,opt,name=channel_id,json=channelId,proto3,oneof" json:"channel_id,omitempty"`
 	Addr          *string                `protobuf:"bytes,2,opt,name=addr,proto3,oneof" json:"addr,omitempty"`
 	WindowSize    *uint64                `protobuf:"varint,3,opt,name=window_size,json=windowSize,proto3,oneof" json:"window_size,omitempty"`
+	BatchSize     *uint64                `protobuf:"varint,4,opt,name=batch_size,json=batchSize,proto3,oneof" json:"batch_size,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -233,6 +234,13 @@ func (x *ConnectReq) GetAddr() string {
 func (x *ConnectReq) GetWindowSize() uint64 {
 	if x != nil && x.WindowSize != nil {
 		return *x.WindowSize
+	}
+	return 0
+}
+
+func (x *ConnectReq) GetBatchSize() uint64 {
+	if x != nil && x.BatchSize != nil {
+		return *x.BatchSize
 	}
 	return 0
 }
@@ -671,17 +679,20 @@ const file_message_proto_rawDesc = "" +
 	"\bAuthResp\x12+\n" +
 	"\tbase_resp\x18\x01 \x01(\v2\t.BaseRespH\x00R\bbaseResp\x88\x01\x01B\f\n" +
 	"\n" +
-	"_base_resp\"\x97\x01\n" +
+	"_base_resp\"\xca\x01\n" +
 	"\n" +
 	"ConnectReq\x12\"\n" +
 	"\n" +
 	"channel_id\x18\x01 \x01(\x04H\x00R\tchannelId\x88\x01\x01\x12\x17\n" +
 	"\x04addr\x18\x02 \x01(\tH\x01R\x04addr\x88\x01\x01\x12$\n" +
 	"\vwindow_size\x18\x03 \x01(\x04H\x02R\n" +
-	"windowSize\x88\x01\x01B\r\n" +
+	"windowSize\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"batch_size\x18\x04 \x01(\x04H\x03R\tbatchSize\x88\x01\x01B\r\n" +
 	"\v_channel_idB\a\n" +
 	"\x05_addrB\x0e\n" +
-	"\f_window_size\"H\n" +
+	"\f_window_sizeB\r\n" +
+	"\v_batch_size\"H\n" +
 	"\vConnectResp\x12+\n" +
 	"\tbase_resp\x18\x01 \x01(\v2\t.BaseRespH\x00R\bbaseResp\x88\x01\x01B\f\n" +
 	"\n" +
