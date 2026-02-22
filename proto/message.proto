@@ -35,6 +35,7 @@ message DataNoti {
 
 message CloseChannelReq {
   optional uint64 channel_id = 1;
+  optional string msg = 2;
 }
 
 message CloseChannelResp {

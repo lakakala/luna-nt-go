@@ -91,6 +91,9 @@ func (c *Client) start(ctx context.Context) error {
 			case message.COMMAND_CHANNEL_WINDOW_UPDATE_NOTI:
 				return c.handleChannelWindowUpdate(ctx, recvCtx)
 
+			case message.COMMAND_CHANNEL_CLOSE_REQ:
+				return c.handleChannelCloseReq(ctx, recvCtx)
+
 			default:
 				return errors.New(fmt.Sprintf("unknown command %d", frame.Command()))
 			}
@@ -187,6 +190,25 @@ func (c *Client) handleChannelWindowUpdate(ctx context.Context, recvCtx *conn.Re
 	return nil
 }
 
+func (c *Client) handleChannelCloseReq(ctx context.Context, recvCtx *conn.RecvMessageContext) error {
+	frame, err := recvCtx.Frame()
+	if err != nil {
+		return err
+	}
+	closeReq := frame.Msg().Msg().(*pb.CloseChannelReq)
+
+	channelID := closeReq.GetChannelId()
+
+	channel, err := c.channelManager.GetChannel(channelID)
+	if err != nil {
+		return err
+	}
+
+	channel.close(ctx, closeReq.GetMsg())
+
+	return nil
+}
+
 func (c *Client) connect(ctx context.Context, remoteConn net.Conn, localAddr string) error {
 
 	channelID := c.channelManager.NextChannelID()
@@ -206,7 +228,7 @@ func (c *Client) connect(ctx context.Context, remoteConn net.Conn, localAddr str
 
 	log.CtxInfof(ctx, "Client %d alloc channel success channelID %d", c.ClientID(), channel.ChannelID())
 
-	if err := c.channelManager.AddChannel(channel); err != nil {
+	if err := c.channelManager.AddChannel(ctx, channel); err != nil {
 		return err
 	}
 

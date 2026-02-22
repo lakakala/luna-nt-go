@@ -2,6 +2,7 @@ package conn
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -67,7 +68,10 @@ func (conn *Conn) readLoop(ctx context.Context) {
 
 		msgID := frame.MsgID()
 
-		log.CtxInfof(ctx, "Conn readLoop recv frame msgID %d", msgID)
+		if log.IsDebugEnabled() {
+			frameJSON, _ := json.Marshal(frame.Msg().Msg())
+			log.CtxDebugf(ctx, "Conn readLoop msgID %d command %d frame %+v", msgID, frame.Command(), string(frameJSON))
+		}
 
 		msgType := message.MsgType(frame.Command())
 		if msgType == message.MessageTypeResp {
@@ -112,12 +116,16 @@ func (conn *Conn) handleSendMessage(ctx context.Context, sendMsg *SendMessage) {
 		conn.sendMsgMap[msgID] = sendMsg
 	}()
 
+	if log.IsDebugEnabled() {
+		frameJSON, _ := json.Marshal(sendMsg.frame.Msg().Msg())
+		log.CtxDebugf(ctx, "Conn writeLoop msgID %d command %d frame %+v", msgID, sendMsg.frame.Command(), string(frameJSON))
+	}
+
 	if err := message.Encode(ctx, conn.conn, sendMsg.frame); err != nil {
 		conn.recvSendMessageResult(makeErrorSendResult(err))
 		return
 	}
 
-	log.CtxInfof(ctx, "Conn writeLoop send frame msgID %d", msgID)
 }
 
 func (conn *Conn) recvSendMessageResult(sendResult *SendResult) {
@@ -137,8 +145,6 @@ func (conn *Conn) recvSendMessageResult(sendResult *SendResult) {
 }
 
 func (conn *Conn) Send(ctx context.Context, msg message.Message) (message.Message, error) {
-
-	log.CtxInfof(ctx, "Conn send %d command", msg.Cmd())
 
 	msgID := conn.nextMsgID.Add(1)
 
@@ -180,13 +186,6 @@ func (conn *Conn) Accept(ctx context.Context) (*RecvMessageContext, error) {
 	if !ok {
 		return nil, nil
 	}
-
-	frame, err := recvMsg.Frame()
-	if err != nil {
-		return nil, err
-	}
-
-	log.CtxInfof(ctx, "Conn accept %d command", frame.Command())
 
 	return recvMsg, nil
 }
@@ -251,8 +250,6 @@ func (recvCtx *RecvMessageContext) Frame() (*message.Frame, error) {
 }
 
 func (recvCtx *RecvMessageContext) SendResp(ctx context.Context, resp message.Message) error {
-
-	log.CtxInfof(ctx, "Conn sendResp %d command", resp.Cmd())
 
 	frame, err := message.MakeFrame(ctx, recvCtx.frame.MsgID(), resp)
 	if err != nil {

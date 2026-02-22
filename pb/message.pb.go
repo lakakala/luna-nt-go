@@ -344,6 +344,7 @@ func (x *DataNoti) GetData() []byte {
 type CloseChannelReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ChannelId     *uint64                `protobuf:"varint,1,opt,name=channel_id,json=channelId,proto3,oneof" json:"channel_id,omitempty"`
+	Msg           *string                `protobuf:"bytes,2,opt,name=msg,proto3,oneof" json:"msg,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -383,6 +384,13 @@ func (x *CloseChannelReq) GetChannelId() uint64 {
 		return *x.ChannelId
 	}
 	return 0
+}
+
+func (x *CloseChannelReq) GetMsg() string {
+	if x != nil && x.Msg != nil {
+		return *x.Msg
+	}
+	return ""
 }
 
 type CloseChannelResp struct {
@@ -702,11 +710,13 @@ const file_message_proto_rawDesc = "" +
 	"channel_id\x18\x01 \x01(\x04H\x00R\tchannelId\x88\x01\x01\x12\x17\n" +
 	"\x04data\x18\x02 \x01(\fH\x01R\x04data\x88\x01\x01B\r\n" +
 	"\v_channel_idB\a\n" +
-	"\x05_data\"D\n" +
+	"\x05_data\"c\n" +
 	"\x0fCloseChannelReq\x12\"\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\x04H\x00R\tchannelId\x88\x01\x01B\r\n" +
-	"\v_channel_id\"M\n" +
+	"channel_id\x18\x01 \x01(\x04H\x00R\tchannelId\x88\x01\x01\x12\x15\n" +
+	"\x03msg\x18\x02 \x01(\tH\x01R\x03msg\x88\x01\x01B\r\n" +
+	"\v_channel_idB\x06\n" +
+	"\x04_msg\"M\n" +
 	"\x10CloseChannelResp\x12+\n" +
 	"\tbase_resp\x18\x01 \x01(\v2\t.BaseRespH\x00R\bbaseResp\x88\x01\x01B\f\n" +
 	"\n" +

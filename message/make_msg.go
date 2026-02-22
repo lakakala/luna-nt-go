@@ -45,9 +45,10 @@ func MakeDataNoti(channelID uint64, data []byte) Message {
 	return NewPbMessage(COMMAND_DATA_NOTI, &dataNoti)
 }
 
-func MakeChannelCloseReq(channelID uint64) Message {
+func MakeChannelCloseReq(channelID uint64, msg string) Message {
 	channelCloseReq := pb.CloseChannelReq{}
 	channelCloseReq.ChannelId = &channelID
+	channelCloseReq.Msg = &msg
 	return NewPbMessage(COMMAND_CHANNEL_CLOSE_REQ, &channelCloseReq)
 }
 

@@ -58,6 +58,9 @@ func init() {
 	// 2.3 定义日志级别（最低级别，高于等于该级别的日志才会输出）
 	// zap.DebugLevel < zap.InfoLevel < zap.WarnLevel < zap.ErrorLevel < zap.DPanicLevel < zap.PanicLevel < zap.FatalLevel
 	level := zapcore.InfoLevel
+	if IsDebugEnabled() {
+		level = zapcore.DebugLevel
+	}
 
 	// 步骤3：创建zap核心对象，再生成Logger
 	core := zapcore.NewCore(encoder, writeSyncer, level)
@@ -72,6 +75,14 @@ func init() {
 // 自定义时间格式：yyyy-MM-dd HH:mm:ss
 func customTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 	enc.AppendString(t.Format("2006-01-02 15:04:05"))
+}
+
+func IsDebugEnabled() bool {
+	return true
+}
+
+func CtxDebugf(ctx context.Context, format string, args ...interface{}) {
+	logger.Debug(fmt.Sprintf(format, args...))
 }
 
 func CtxInfof(ctx context.Context, format string, args ...interface{}) {

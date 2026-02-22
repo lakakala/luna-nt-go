@@ -3,8 +3,8 @@ package conn
 import "sync"
 
 const (
-	BATCH_SIZE  = 4
-	WINDOW_SIZE = 10
+	BATCH_SIZE  = 100
+	WINDOW_SIZE = 100
 )
 
 type ChannelSendWindowManager struct {

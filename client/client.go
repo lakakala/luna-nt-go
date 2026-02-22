@@ -33,7 +33,7 @@ const (
 type Client struct {
 	mutex sync.Mutex
 
-	localConnMap map[uint64]*LocalConn
+	channelManager *ChannelManager
 
 	status ClientStatus
 	conf   *Config
@@ -50,7 +50,7 @@ func newClient(ctx context.Context, conf *Config) (*Client, error) {
 	cli := &Client{
 		mutex: sync.Mutex{},
 
-		localConnMap: make(map[uint64]*LocalConn),
+		channelManager: newChannelManager(),
 
 		status: ClientStatusUninit,
 		conf:   conf,
@@ -88,12 +88,14 @@ func (cli *Client) start(ctx context.Context) {
 			case message.COMMAND_CHANNEL_WINDOW_UPDATE_NOTI:
 				return cli.handleChannelWindowUpdate(ctx, recvCtx)
 
+			case message.COMMAND_CHANNEL_CLOSE_REQ:
+				return cli.handleChannelCloseReq(ctx, recvCtx)
+
 			default:
 				return errors.New(fmt.Sprintf("unknown command %d", frame.Command()))
 			}
 		}(); err != nil {
 			log.CtxErrorf(ctx, "Client %d accpet handler failed err %s", cli.conf.ClientID, err)
-			break
 		}
 	}
 }
@@ -131,18 +133,16 @@ func (cli *Client) handleConnect(ctx context.Context, recvCtx *conn.RecvMessageC
 
 	log.CtxInfof(ctx, "Client %d handleConnect channelID %d localAddr %s", cli.conf.ClientID, req.GetChannelId(), req.GetAddr())
 
-	localConn, err := NewLocalConn(ctx, cli.conn, req.GetAddr(), req.GetChannelId(), req.GetWindowSize(), req.GetBatchSize())
+	localConn, err := NewLocalConn(ctx, cli.channelManager, cli.conn, req.GetAddr(), req.GetChannelId(), req.GetWindowSize(), req.GetBatchSize())
 	if err != nil {
 		recvCtx.SendResp(ctx, message.MakeConnectResp(-1, err.Error()))
 		return nil
 	}
 
-	func() {
-		cli.mutex.Lock()
-		defer cli.mutex.Unlock()
-
-		cli.localConnMap[req.GetChannelId()] = localConn
-	}()
+	if err := cli.channelManager.AddChannel(ctx, localConn); err != nil {
+		recvCtx.SendResp(ctx, message.MakeConnectResp(-1, err.Error()))
+		return nil
+	}
 
 	localConn.start(ctx)
 
@@ -158,8 +158,8 @@ func (cli *Client) handleData(ctx context.Context, recvCtx *conn.RecvMessageCont
 
 	dataNoti := frame.Msg().Msg().(*pb.DataNoti)
 
-	localConn := cli.getLocalConn(ctx, dataNoti.GetChannelId())
-	if localConn == nil {
+	localConn, err := cli.channelManager.GetChannel(dataNoti.GetChannelId())
+	if err != nil {
 		log.CtxErrorf(ctx, "Client %d unknown channelID %d", cli.conf.ClientID, dataNoti.GetChannelId())
 		return nil
 	}
@@ -179,8 +179,8 @@ func (cli *Client) handleChannelWindowUpdate(ctx context.Context, recvCtx *conn.
 
 	windowUpdateNoti := frame.Msg().Msg().(*pb.ChannelWindowUpdateNoti)
 
-	localConn := cli.getLocalConn(ctx, windowUpdateNoti.GetChannelId())
-	if localConn == nil {
+	localConn, err := cli.channelManager.GetChannel(windowUpdateNoti.GetChannelId())
+	if err != nil {
 		log.CtxErrorf(ctx, "Client %d unknown channelID %d", cli.conf.ClientID, windowUpdateNoti.GetChannelId())
 		return nil
 	}
@@ -190,13 +190,25 @@ func (cli *Client) handleChannelWindowUpdate(ctx context.Context, recvCtx *conn.
 	return nil
 }
 
-func (cli *Client) Close(err error) {
-	// return cli.conn.Close()
+func (cli *Client) handleChannelCloseReq(ctx context.Context, recvCtx *conn.RecvMessageContext) error {
+	frame, err := recvCtx.Frame()
+	if err != nil {
+		return err
+	}
+
+	closeReq := frame.Msg().Msg().(*pb.CloseChannelReq)
+
+	localConn, err := cli.channelManager.GetChannel(closeReq.GetChannelId())
+	if err != nil {
+		log.CtxErrorf(ctx, "Client %d unknown channelID %d", cli.conf.ClientID, closeReq.GetChannelId())
+		return nil
+	}
+
+	localConn.close(ctx, closeReq.GetMsg())
+
+	return nil
 }
 
-func (cli *Client) getLocalConn(ctx context.Context, channelID uint64) *LocalConn {
-	cli.mutex.Lock()
-	defer cli.mutex.Unlock()
-
-	return cli.localConnMap[channelID]
+func (cli *Client) Close(err error) {
+	// return cli.conn.Close()
 }
