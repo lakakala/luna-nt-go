@@ -80,8 +80,12 @@ func (lc *LocalConn) start(ctx context.Context) {
 	go func() {
 
 		for data := range lc.writeChan {
+			lc.recvWindowManager.Acquire()
 
 			n, err := lc.localConn.Write(data)
+
+			log.CtxInfof(ctx, "LocalConn channelID %d write data %v", lc.channelID, data[:n])
+
 			if err != nil {
 				log.CtxErrorf(ctx, "LocalConn channelID %d write data failed err %s", lc.channelID, err)
 				break

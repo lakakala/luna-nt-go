@@ -102,7 +102,7 @@ func (c *Channel) start(ctx context.Context) {
 
 		for {
 
-			// c.sendWindowManager.Acquire()
+			c.sendWindowManager.Acquire()
 
 			buf := make([]byte, c.batchSize)
 
@@ -130,6 +130,8 @@ func (c *Channel) start(ctx context.Context) {
 
 	go func() {
 		for data := range c.writeChan {
+			c.recvWindowManager.Acquire()
+
 			log.CtxInfof(ctx, "Channel %d write data %v", c.channelID, data)
 
 			n, err := c.remoteConn.Write(data)
@@ -140,16 +142,16 @@ func (c *Channel) start(ctx context.Context) {
 
 			log.CtxInfof(ctx, "Channel %d remoteConn recv %d write %d byte", c.channelID, len(data), n)
 
-			// needAckWindowSize := c.recvWindowManager.Release(0)
-			// if needAckWindowSize > 0 {
-			// 	_, err := c.conn.Send(ctx, message.MakeChanelWindowUpdateNoti(c.channelID, needAckWindowSize))
-			// 	if err != nil {
-			// 		log.CtxErrorf(ctx, "Channel chnnelID %d send window update failed err %s", c.ChannelID(), err)
-			// 		return
-			// 	}
+			needAckWindowSize := c.recvWindowManager.Release(0)
+			if needAckWindowSize > 0 {
+				_, err := c.conn.Send(ctx, message.MakeChanelWindowUpdateNoti(c.channelID, needAckWindowSize))
+				if err != nil {
+					log.CtxErrorf(ctx, "Channel chnnelID %d send window update failed err %s", c.ChannelID(), err)
+					return
+				}
 
-			// 	log.CtxInfof(ctx, "Channel %d send window update %d", c.channelID, needAckWindowSize)
-			// }
+				log.CtxInfof(ctx, "Channel %d send window update %d", c.channelID, needAckWindowSize)
+			}
 
 		}
 	}()
@@ -158,7 +160,7 @@ func (c *Channel) start(ctx context.Context) {
 
 func (c *Channel) Release(ctx context.Context, ackWindowSize uint64) {
 	log.CtxInfof(ctx, "Channel %d release window size %d", c.channelID, ackWindowSize)
-	// c.sendWindowManager.Release(ackWindowSize)
+	c.sendWindowManager.Release(ackWindowSize)
 }
 
 func (c *Channel) close(ctx context.Context) {

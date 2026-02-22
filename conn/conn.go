@@ -7,6 +7,7 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/lakakala/luna-nt-go/message"
 	"github.com/lakakala/luna-nt-go/utils/log"
@@ -152,6 +153,10 @@ func (conn *Conn) Send(ctx context.Context, msg message.Message) (message.Messag
 
 	msgType := message.MsgType(msg.Cmd())
 	if msgType == message.MessageTypeReq {
+
+		ctx, cancel := context.WithTimeout(ctx, time.Second*20)
+		defer cancel()
+
 		select {
 		case resp := <-respChan:
 			if resp.err != nil {
@@ -214,7 +219,7 @@ type SendMessage struct {
 
 func MakeSendMessage(frame *message.Frame) (*SendMessage, chan *SendResult) {
 
-	respChan := make(chan *SendResult, 1)
+	respChan := make(chan *SendResult, 2)
 
 	return &SendMessage{
 		frame:    frame,

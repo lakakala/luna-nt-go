@@ -1,11 +1,11 @@
-addr: 0.0.0.0:9000
+addr: 0.0.0.0:8080
 
 clients:
   1:
     id: 1
     binds:
       - bind_addr: 0.0.0.0:3000
-        local_addr: 192.168.44.100:22
+        local_addr: 192.168.124.200:22
 
 
 

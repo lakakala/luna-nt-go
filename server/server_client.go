@@ -96,7 +96,7 @@ func (c *Client) start(ctx context.Context) error {
 			}
 		}(); err != nil {
 			log.CtxErrorf(ctx, "Client %d accpet handler failed err %s", c.ClientID(), err)
-			break
+			// break
 		}
 	}
 

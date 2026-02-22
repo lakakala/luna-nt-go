@@ -3,8 +3,8 @@ package conn
 import "sync"
 
 const (
-	BATCH_SIZE  = 1024
-	WINDOW_SIZE = 1024
+	BATCH_SIZE  = 4
+	WINDOW_SIZE = 10
 )
 
 type ChannelSendWindowManager struct {
@@ -28,7 +28,7 @@ func (c *ChannelSendWindowManager) Acquire() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if c.currWindowSize >= c.windowSize {
+	if c.currWindowSize > c.windowSize {
 		c.cond.Wait()
 	}
 
@@ -44,23 +44,22 @@ func (c *ChannelSendWindowManager) Release(ackWindowSize uint64) {
 }
 
 type ChannelRecvWindowManager struct {
-	mutex          *sync.Mutex
 	currWindowSize uint64
 	windowSize     uint64
 }
 
 func NewChannelRecvWindowManager(windowSize uint64) *ChannelRecvWindowManager {
-	mutex := &sync.Mutex{}
 	return &ChannelRecvWindowManager{
-		mutex:          mutex,
 		currWindowSize: 0,
 		windowSize:     windowSize,
 	}
 }
 
+func (c *ChannelRecvWindowManager) Acquire() {
+	c.currWindowSize += 1
+}
+
 func (c *ChannelRecvWindowManager) Release(minAckWindowSize uint64) uint64 {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
 
 	if minAckWindowSize == 0 {
 		minAckWindowSize = c.windowSize / 2
@@ -70,8 +69,8 @@ func (c *ChannelRecvWindowManager) Release(minAckWindowSize uint64) uint64 {
 		return 0
 	}
 
-	ackWindownSize := c.currWindowSize
+	ackWindowSize := c.currWindowSize
 	c.currWindowSize = 0
 
-	return ackWindownSize
+	return ackWindowSize
 }
