@@ -98,8 +98,9 @@ func (c *Client) start(ctx context.Context) error {
 				return errors.New(fmt.Sprintf("unknown command %d", frame.Command()))
 			}
 		}(); err != nil {
-			log.CtxErrorf(ctx, "Client %d accpet handler failed err %s", c.ClientID(), err)
-			// break
+			log.CtxWarnf(ctx, "Client %d accpet handler failed err %s", c.ClientID(), err)
+			c.Close(ctx)
+			break
 		}
 	}
 
@@ -266,4 +267,6 @@ func (c *Client) Close(ctx context.Context) {
 	c.conn.Close(ctx)
 
 	c.clientManager.RemoveClient(ctx, c.ClientID())
+
+	log.CtxInfof(ctx, "")
 }

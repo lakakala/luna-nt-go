@@ -13,6 +13,8 @@ const (
 	COMMAND_CHANNEL_CLOSE_REQ          CommandType = 6
 	COMMAND_CHANNEL_CLOSE_RESP         CommandType = 7
 	COMMAND_CHANNEL_WINDOW_UPDATE_NOTI CommandType = 8
+	COMMAND_CLIENT_CLOSE_REQ           CommandType = 9
+	COMMAND_CLIENT_CLOSE_RESP          CommandType = 10
 )
 
 type Message interface {
