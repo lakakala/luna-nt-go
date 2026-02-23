@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"net"
-	"sync"
 
 	"github.com/lakakala/luna-nt-go/utils/log"
 )
@@ -54,28 +53,4 @@ func (ser *Server) handleConn(ctx context.Context, rawConn net.Conn) {
 		log.CtxErrorf(ctx, "cli.start err: %v", err)
 		return
 	}
-}
-
-type ClientManager struct {
-	mutex     sync.Mutex
-	clientMap map[uint64]*Client
-}
-
-func newClientManager() *ClientManager {
-	return &ClientManager{
-		clientMap: make(map[uint64]*Client),
-	}
-}
-
-func (cm *ClientManager) AddClient(ctx context.Context, client *Client) bool {
-	cm.mutex.Lock()
-	defer cm.mutex.Unlock()
-
-	if _, ok := cm.clientMap[client.ClientID()]; ok {
-		log.CtxErrorf(ctx, "clientID %d already exists", client.ClientID())
-		return false
-	}
-
-	cm.clientMap[client.ClientID()] = client
-	return true
 }

@@ -59,7 +59,7 @@ func MakeChannelCloseResp(code int32, msg string) Message {
 		Msg:  &msg,
 	}
 
-	return NewPbMessage(COMMAND_CONNECT_RESP, &channelCloseResp)
+	return NewPbMessage(COMMAND_CHANNEL_CLOSE_RESP, &channelCloseResp)
 }
 
 func MakeChanelWindowUpdateNoti(channelID uint64, windowSize uint64) Message {

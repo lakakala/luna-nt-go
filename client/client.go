@@ -204,7 +204,9 @@ func (cli *Client) handleChannelCloseReq(ctx context.Context, recvCtx *conn.Recv
 		return nil
 	}
 
-	localConn.close(ctx, closeReq.GetMsg())
+	localConn.passivelyClose(ctx, closeReq.GetMsg())
+
+	recvCtx.SendResp(ctx, message.MakeChannelCloseResp(0, "success"))
 
 	return nil
 }

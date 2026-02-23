@@ -69,6 +69,15 @@ func (c *ChannelManager) RemoveChannel(ctx context.Context, channelID uint64) er
 	return nil
 }
 
+func (c *ChannelManager) CloseAll(ctx context.Context) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	for _, channel := range c.channelMap {
+		channel.close(ctx, "ChannelManager CloseAll")
+	}
+}
+
 type Channel struct {
 	mutex          sync.Mutex
 	conn           *conn.Conn
@@ -256,7 +265,13 @@ func (c *Channel) close(ctx context.Context, msg string) {
 		log.CtxErrorf(ctx, "Channel chnnelID %d send close failed err %s", c.ChannelID(), err)
 	}
 
+	c.passivelyClose(ctx, msg)
+}
+
+func (c *Channel) passivelyClose(ctx context.Context, msg string) {
 	c.channelManager.RemoveChannel(ctx, c.channelID)
 
 	c.remoteConn.Close()
+
+	log.CtxInfof(ctx, "Channel channelID %d close msg %s", c.ChannelID(), msg)
 }

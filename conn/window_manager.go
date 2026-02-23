@@ -3,7 +3,7 @@ package conn
 import "sync"
 
 const (
-	BATCH_SIZE  = 100
+	BATCH_SIZE  = 1024
 	WINDOW_SIZE = 100
 )
 

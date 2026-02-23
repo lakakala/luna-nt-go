@@ -257,6 +257,11 @@ func (lc *LocalConn) close(ctx context.Context, msg string) {
 		log.CtxErrorf(ctx, "LocalConn channelID %d send close failed err %s", lc.channelID, err)
 	}
 
+	lc.passivelyClose(ctx, msg)
+
+}
+
+func (lc *LocalConn) passivelyClose(ctx context.Context, msg string) {
 	lc.channelManager.RemoveChannel(ctx, lc.channelID)
 
 	log.CtxInfof(ctx, "LocalConn channelID %d close msg %s", lc.channelID, msg)

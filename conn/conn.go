@@ -2,7 +2,6 @@ package conn
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -68,11 +67,6 @@ func (conn *Conn) readLoop(ctx context.Context) {
 
 		msgID := frame.MsgID()
 
-		if log.IsDebugEnabled() {
-			frameJSON, _ := json.Marshal(frame.Msg().Msg())
-			log.CtxDebugf(ctx, "Conn readLoop msgID %d command %d frame %+v", msgID, frame.Command(), string(frameJSON))
-		}
-
 		msgType := message.MsgType(frame.Command())
 		if msgType == message.MessageTypeResp {
 			ok := func() bool {
@@ -88,15 +82,15 @@ func (conn *Conn) readLoop(ctx context.Context) {
 				log.CtxErrorf(ctx, "Conn readLoop msgID %d can not find req", msgID)
 			}
 
-			conn.recvSendMessageResult(makeSuccessSendResult(frame))
+			conn.recvSendMessageResult(ctx, makeSuccessSendResult(frame))
 		} else {
-			conn.handleFrame(frame)
+			conn.handleFrame(ctx, frame)
 		}
 
 	}
 }
 
-func (conn *Conn) handleFrame(frame *message.Frame) {
+func (conn *Conn) handleFrame(ctx context.Context, frame *message.Frame) {
 	conn.readChan <- makeSuccessRecvMessage(frame, conn.writeChan)
 }
 
@@ -109,38 +103,44 @@ func (conn *Conn) writeLoop(ctx context.Context) {
 func (conn *Conn) handleSendMessage(ctx context.Context, sendMsg *SendMessage) {
 	msgID := sendMsg.frame.MsgID()
 
-	func() {
-		conn.mutex.Lock()
-		defer conn.mutex.Unlock()
+	msgType := message.MsgType(sendMsg.frame.Command())
+	if msgType == message.MessageTypeReq {
+		func() {
+			conn.mutex.Lock()
+			defer conn.mutex.Unlock()
 
-		conn.sendMsgMap[msgID] = sendMsg
-	}()
-
-	if log.IsDebugEnabled() {
-		frameJSON, _ := json.Marshal(sendMsg.frame.Msg().Msg())
-		log.CtxDebugf(ctx, "Conn writeLoop msgID %d command %d frame %+v", msgID, sendMsg.frame.Command(), string(frameJSON))
+			conn.sendMsgMap[msgID] = sendMsg
+		}()
 	}
 
 	if err := message.Encode(ctx, conn.conn, sendMsg.frame); err != nil {
-		conn.recvSendMessageResult(makeErrorSendResult(err))
+		conn.recvSendMessageResult(ctx, makeErrorSendResult(err))
 		return
 	}
 
 }
 
-func (conn *Conn) recvSendMessageResult(sendResult *SendResult) {
-
-	conn.mutex.Lock()
-	defer conn.mutex.Unlock()
+func (conn *Conn) recvSendMessageResult(ctx context.Context, sendResult *SendResult) {
 
 	msgID := sendResult.frame.MsgID()
 
-	sendMsg, ok := conn.sendMsgMap[msgID]
-	if !ok {
+	sendMsg := func() *SendMessage {
+		conn.mutex.Lock()
+		defer conn.mutex.Unlock()
+
+		sendMsg, ok := conn.sendMsgMap[msgID]
+		if !ok {
+			return nil
+		}
+
+		delete(conn.sendMsgMap, msgID)
+		return sendMsg
+	}()
+
+	if sendMsg == nil {
 		return
 	}
 
-	delete(conn.sendMsgMap, msgID)
 	sendMsg.respChan <- sendResult
 }
 
@@ -190,6 +190,13 @@ func (conn *Conn) Accept(ctx context.Context) (*RecvMessageContext, error) {
 	return recvMsg, nil
 }
 
+func (conn *Conn) Close(ctx context.Context) {
+	close(conn.readChan)
+	close(conn.writeChan)
+
+	conn.conn.Close()
+}
+
 type SendResult struct {
 	frame *message.Frame
 	err   error
@@ -218,7 +225,7 @@ type SendMessage struct {
 
 func MakeSendMessage(frame *message.Frame) (*SendMessage, chan *SendResult) {
 
-	respChan := make(chan *SendResult, 2)
+	respChan := make(chan *SendResult, 1)
 
 	return &SendMessage{
 		frame:    frame,
@@ -251,7 +258,11 @@ func (recvCtx *RecvMessageContext) Frame() (*message.Frame, error) {
 
 func (recvCtx *RecvMessageContext) SendResp(ctx context.Context, resp message.Message) error {
 
-	frame, err := message.MakeFrame(ctx, recvCtx.frame.MsgID(), resp)
+	reqFrame, err := recvCtx.Frame()
+	if err != nil {
+		return err
+	}
+	frame, err := message.MakeFrame(ctx, reqFrame.MsgID(), resp)
 	if err != nil {
 		return err
 	}
