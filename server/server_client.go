@@ -88,7 +88,7 @@ func (c *Client) start(ctx context.Context) error {
 	for {
 		recvCtx, err := c.conn.Accept(ctx)
 		if err != nil {
-			return err
+			break
 		}
 
 		if err := func() error {
@@ -115,10 +115,11 @@ func (c *Client) start(ctx context.Context) error {
 			}
 		}(); err != nil {
 			log.CtxWarnf(ctx, "Client %d accpet handler failed err %s", c.ClientID(), err)
-			c.Close(ctx)
 			break
 		}
 	}
+
+	c.Close(ctx)
 
 	return nil
 }
@@ -178,7 +179,8 @@ func (c *Client) handleData(ctx context.Context, recvCtx *conn.RecvMessageContex
 
 	channel, err := c.channelManager.GetChannel(channelID)
 	if err != nil {
-		return err
+		log.CtxWarnf(ctx, "Client %d handleData unknown channelID %d", c.ClientID(), channelID)
+		return nil
 	}
 
 	if err := channel.recvData(ctx, dataNoti.Data); err != nil {
@@ -199,7 +201,8 @@ func (c *Client) handleChannelWindowUpdate(ctx context.Context, recvCtx *conn.Re
 
 	channel, err := c.channelManager.GetChannel(channelID)
 	if err != nil {
-		return err
+		log.CtxWarnf(ctx, "Client %d handleChannelWindowUpdate unknown channelID %d", c.ClientID(), channelID)
+		return nil
 	}
 
 	channel.Release(ctx, windowUpdateNoti.GetWindowSize())
@@ -218,7 +221,8 @@ func (c *Client) handleChannelCloseReq(ctx context.Context, recvCtx *conn.RecvMe
 
 	channel, err := c.channelManager.GetChannel(channelID)
 	if err != nil {
-		return err
+		log.CtxWarnf(ctx, "Client %d handleChannelCloseReq unknown channelID %d", c.ClientID(), channelID)
+		return nil
 	}
 
 	channel.passivelyClose(ctx, closeReq.GetMsg())

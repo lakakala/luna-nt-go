@@ -173,15 +173,18 @@ func (cli *Client) handleConnect(ctx context.Context, recvCtx *conn.RecvMessageC
 
 	req := frame.Msg().Msg().(*pb.ConnectReq)
 
-	log.CtxInfof(ctx, "Client %d handleConnect channelID %d localAddr %s", cli.conf.ClientID, req.GetChannelId(), req.GetAddr())
+	channelID := req.GetChannelId()
 
-	localConn, err := NewLocalConn(ctx, cli.channelManager, cli.conn, req.GetAddr(), req.GetChannelId(), req.GetWindowSize(), req.GetBatchSize())
+	log.CtxInfof(ctx, "Client %d handleConnect channelID %d localAddr %s", cli.conf.ClientID, channelID, req.GetAddr())
+
+	localConn, err := NewLocalConn(ctx, cli.channelManager, cli.conn, req.GetAddr(), channelID, req.GetWindowSize(), req.GetBatchSize())
 	if err != nil {
 		recvCtx.SendResp(ctx, message.MakeConnectResp(-1, err.Error()))
 		return nil
 	}
 
 	if err := cli.channelManager.AddChannel(ctx, localConn); err != nil {
+		log.CtxWarnf(ctx, "Client %d handleConnect unknown channelID %d", cli.conf.ClientID, channelID)
 		recvCtx.SendResp(ctx, message.MakeConnectResp(-1, err.Error()))
 		return nil
 	}
@@ -202,7 +205,7 @@ func (cli *Client) handleData(ctx context.Context, recvCtx *conn.RecvMessageCont
 
 	localConn, err := cli.channelManager.GetChannel(dataNoti.GetChannelId())
 	if err != nil {
-		log.CtxWarnf(ctx, "Client %d unknown channelID %d", cli.conf.ClientID, dataNoti.GetChannelId())
+		log.CtxWarnf(ctx, "Client %d handleData unknown channelID %d", cli.conf.ClientID, dataNoti.GetChannelId())
 		return nil
 	}
 
@@ -223,7 +226,7 @@ func (cli *Client) handleChannelWindowUpdate(ctx context.Context, recvCtx *conn.
 
 	localConn, err := cli.channelManager.GetChannel(windowUpdateNoti.GetChannelId())
 	if err != nil {
-		log.CtxWarnf(ctx, "Client %d unknown channelID %d", cli.conf.ClientID, windowUpdateNoti.GetChannelId())
+		log.CtxWarnf(ctx, "Client %d handleChannelWindowUpdate unknown channelID %d", cli.conf.ClientID, windowUpdateNoti.GetChannelId())
 		return nil
 	}
 

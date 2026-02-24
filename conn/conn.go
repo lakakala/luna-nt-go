@@ -159,6 +159,10 @@ func (conn *Conn) Send(ctx context.Context, msg message.Message) (message.Messag
 
 		select {
 		case resp := <-respChan:
+			if resp == nil {
+				return nil, errors.New("send chan close")
+			}
+
 			return resp.Frame().Msg(), nil
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -182,10 +186,22 @@ func (conn *Conn) Accept(ctx context.Context) (*RecvMessageContext, error) {
 }
 
 func (conn *Conn) Close(ctx context.Context) {
+	conn.closeSendMsgMap(ctx)
+
 	close(conn.readChan)
 	close(conn.writeChan)
 
 	conn.conn.Close()
 
 	log.CtxInfof(ctx, "Conn close done")
+}
+
+func (conn *Conn) closeSendMsgMap(ctx context.Context) {
+	conn.mutex.Lock()
+	defer conn.mutex.Unlock()
+
+	for _, sendMsg := range conn.sendMsgMap {
+
+		close(sendMsg.respChan)
+	}
 }
