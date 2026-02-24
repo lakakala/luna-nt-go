@@ -68,6 +68,15 @@ func (cm *ChannelManager) RemoveChannel(ctx context.Context, channelID uint64) e
 	return nil
 }
 
+func (cm *ChannelManager) CloseAll(ctx context.Context) {
+
+	for _, lc := range cm.localConnMap {
+		lc.close(ctx, "ChannelManager CloseAll")
+	}
+
+	log.CtxInfof(ctx, "ChannelManager CloseAll success")
+}
+
 type LocalConn struct {
 	mutex sync.Mutex
 
@@ -259,6 +268,7 @@ func (lc *LocalConn) close(ctx context.Context, msg string) {
 
 	lc.passivelyClose(ctx, msg)
 
+	log.CtxInfof(ctx, "LocalConn channelID %d close done msg %s", lc.channelID, msg)
 }
 
 func (lc *LocalConn) passivelyClose(ctx context.Context, msg string) {

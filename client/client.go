@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/lakakala/luna-nt-go/conn"
 	"github.com/lakakala/luna-nt-go/message"
@@ -26,8 +27,10 @@ func StartClient(conf *Config) error {
 type ClientStatus int16
 
 const (
-	ClientStatusUninit ClientStatus = 1
-	ClientStatusInited ClientStatus = 2
+	ClientStatusUninit   ClientStatus = 1
+	ClientStatusInited   ClientStatus = 2
+	ClientStatusCloseing ClientStatus = 3
+	ClientStatusClosed   ClientStatus = 4
 )
 
 type Client struct {
@@ -42,11 +45,6 @@ type Client struct {
 
 func newClient(ctx context.Context, conf *Config) (*Client, error) {
 
-	conn, err := conn.NewConn(ctx, conf.Addr)
-	if err != nil {
-		return nil, err
-	}
-
 	cli := &Client{
 		mutex: sync.Mutex{},
 
@@ -54,22 +52,63 @@ func newClient(ctx context.Context, conf *Config) (*Client, error) {
 
 		status: ClientStatusUninit,
 		conf:   conf,
-		conn:   conn,
 	}
 
 	return cli, nil
 }
 
+func (cli *Client) GetStatus() ClientStatus {
+	cli.mutex.Lock()
+	defer cli.mutex.Unlock()
+
+	return cli.status
+}
+
+func (cli *Client) setStatus(status ClientStatus) {
+	cli.mutex.Lock()
+	defer cli.mutex.Unlock()
+
+	cli.status = status
+}
+
 func (cli *Client) start(ctx context.Context) {
 
-	cli.auth(ctx)
+	for {
+		if err := cli.doStart(ctx); err != nil {
+			log.CtxWarnf(ctx, "Client %d start failed err %s", cli.conf.ClientID, err)
+		}
+
+		cli.Close(ctx)
+		time.Sleep(time.Second * 5)
+	}
+}
+
+func (cli *Client) doStart(ctx context.Context) error {
+
+	conn, err := conn.NewConn(ctx, cli.conf.Addr)
+	if err != nil {
+		return err
+	}
+
+	func() {
+		cli.mutex.Lock()
+		defer cli.mutex.Unlock()
+
+		cli.conn = conn
+	}()
+
+	cli.conn = conn
+
+	err = cli.auth(ctx)
+	if err != nil {
+		return err
+	}
 
 	for {
 
-		recvCtx, err := cli.conn.Accept(ctx)
+		recvCtx, err := conn.Accept(ctx)
 		if err != nil {
-			cli.Close(err)
-			return
+			break
 		}
 
 		if err := func() error {
@@ -95,34 +134,37 @@ func (cli *Client) start(ctx context.Context) {
 				return errors.New(fmt.Sprintf("unknown command %d", frame.Command()))
 			}
 		}(); err != nil {
-			log.CtxErrorf(ctx, "Client %d accpet handler failed err %s", cli.conf.ClientID, err)
+			log.CtxWarnf(ctx, "Client %d accpet handler failed err %s", cli.conf.ClientID, err)
+			return err
 		}
 	}
+
+	return nil
 }
 
-func (cli *Client) auth(ctx context.Context) {
+func (cli *Client) auth(ctx context.Context) error {
 	resp, err := cli.conn.Send(ctx, message.MakeAuthReq(cli.conf.Token, cli.conf.ClientID))
 	if err != nil {
-		cli.Close(err)
-		return
+		return err
 	}
 
 	authResp := resp.Msg().(*pb.AuthResp)
 
 	if authResp.BaseResp.GetCode() != 0 {
-		cli.Close(err)
-		return
+		return errors.New(authResp.BaseResp.GetMsg())
 	}
 
-	func() {
-		cli.mutex.Lock()
-		defer cli.mutex.Unlock()
+	cli.setStatus(ClientStatusInited)
 
-		cli.status = ClientStatusInited
-	}()
+	log.CtxInfof(ctx, "Client %d auth success", cli.conf.ClientID)
+	return nil
 }
 
 func (cli *Client) handleConnect(ctx context.Context, recvCtx *conn.RecvMessageContext) error {
+
+	if cli.GetStatus() != ClientStatusInited {
+		return errors.New("client not inited")
+	}
 
 	frame, err := recvCtx.Frame()
 	if err != nil {
@@ -160,7 +202,7 @@ func (cli *Client) handleData(ctx context.Context, recvCtx *conn.RecvMessageCont
 
 	localConn, err := cli.channelManager.GetChannel(dataNoti.GetChannelId())
 	if err != nil {
-		log.CtxErrorf(ctx, "Client %d unknown channelID %d", cli.conf.ClientID, dataNoti.GetChannelId())
+		log.CtxWarnf(ctx, "Client %d unknown channelID %d", cli.conf.ClientID, dataNoti.GetChannelId())
 		return nil
 	}
 
@@ -181,7 +223,7 @@ func (cli *Client) handleChannelWindowUpdate(ctx context.Context, recvCtx *conn.
 
 	localConn, err := cli.channelManager.GetChannel(windowUpdateNoti.GetChannelId())
 	if err != nil {
-		log.CtxErrorf(ctx, "Client %d unknown channelID %d", cli.conf.ClientID, windowUpdateNoti.GetChannelId())
+		log.CtxWarnf(ctx, "Client %d unknown channelID %d", cli.conf.ClientID, windowUpdateNoti.GetChannelId())
 		return nil
 	}
 
@@ -200,7 +242,7 @@ func (cli *Client) handleChannelCloseReq(ctx context.Context, recvCtx *conn.Recv
 
 	localConn, err := cli.channelManager.GetChannel(closeReq.GetChannelId())
 	if err != nil {
-		log.CtxErrorf(ctx, "Client %d unknown channelID %d", cli.conf.ClientID, closeReq.GetChannelId())
+		log.CtxWarnf(ctx, "Client %d unknown channelID %d", cli.conf.ClientID, closeReq.GetChannelId())
 		return nil
 	}
 
@@ -208,9 +250,22 @@ func (cli *Client) handleChannelCloseReq(ctx context.Context, recvCtx *conn.Recv
 
 	recvCtx.SendResp(ctx, message.MakeChannelCloseResp(0, "success"))
 
+	log.CtxInfof(ctx, "Client %d handleChannelCloseReq channelID %d msg %s success", cli.conf.ClientID, closeReq.GetChannelId(), closeReq.GetMsg())
 	return nil
 }
 
-func (cli *Client) Close(err error) {
-	// return cli.conn.Close()
+func (cli *Client) Close(ctx context.Context) {
+
+	cli.setStatus(ClientStatusCloseing)
+
+	cli.channelManager.CloseAll(ctx)
+
+	if cli.conn != nil {
+		cli.conn.Close(ctx)
+		cli.conn = nil
+	}
+
+	cli.setStatus(ClientStatusClosed)
+
+	log.CtxInfof(ctx, "Client %d Close success", cli.conf.ClientID)
 }
