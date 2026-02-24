@@ -235,6 +235,15 @@ func (c *Client) connect(ctx context.Context, remoteConn net.Conn, localAddr str
 	}
 
 	channelID := c.channelManager.NextChannelID()
+
+	channel := NewChannel(ctx, c.channelManager, channelID, conn.BATCH_SIZE, conn.WINDOW_SIZE, remoteConn, c.conn)
+
+	log.CtxInfof(ctx, "Client %d alloc channel success channelID %d", c.ClientID(), channel.ChannelID())
+
+	if err := c.channelManager.AddChannel(ctx, channel); err != nil {
+		return err
+	}
+
 	resp, err := c.conn.Send(ctx, message.MakeConnectReq(channelID, localAddr, conn.BATCH_SIZE, conn.WINDOW_SIZE))
 	if err != nil {
 		return err
@@ -244,15 +253,10 @@ func (c *Client) connect(ctx context.Context, remoteConn net.Conn, localAddr str
 	if connectResp.BaseResp.GetCode() != 0 {
 		log.CtxWarnf(ctx, "Client %d alloc channel failed code %d msg %s",
 			c.ClientID(), connectResp.BaseResp.GetCode(), connectResp.BaseResp.GetMsg())
+
+		c.channelManager.CloseChannel(ctx, channelID)
+
 		return errors.New(connectResp.BaseResp.GetMsg())
-	}
-
-	channel := NewChannel(ctx, c.channelManager, channelID, conn.BATCH_SIZE, conn.WINDOW_SIZE, remoteConn, c.conn)
-
-	log.CtxInfof(ctx, "Client %d alloc channel success channelID %d", c.ClientID(), channel.ChannelID())
-
-	if err := c.channelManager.AddChannel(ctx, channel); err != nil {
-		return err
 	}
 
 	channel.start(ctx)

@@ -33,8 +33,8 @@ func NewConnFromRawConn(ctx context.Context, rawConn net.Conn) (*Conn, error) {
 
 		sendMsgMap: make(map[uint64]*SendMessage),
 
-		readChan:  make(chan *RecvMessageContext, 10000),
-		writeChan: make(chan *SendMessage, 10000),
+		readChan:  make(chan *RecvMessageContext, 1000),
+		writeChan: make(chan *SendMessage, 1000),
 	}
 
 	conn.start(ctx)
