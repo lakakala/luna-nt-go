@@ -59,7 +59,7 @@ func (c *ChannelManager) AddChannel(ctx context.Context, channel *Channel) error
 	return nil
 }
 
-func (c *ChannelManager) RemoveChannel(ctx context.Context, channelID uint64) error {
+func (c *ChannelManager) CloseChannel(ctx context.Context, channelID uint64) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -70,12 +70,12 @@ func (c *ChannelManager) RemoveChannel(ctx context.Context, channelID uint64) er
 }
 
 func (c *ChannelManager) CloseAll(ctx context.Context) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
 
 	for _, channel := range c.channelMap {
 		channel.close(ctx, "ChannelManager CloseAll")
 	}
+
+	log.CtxInfof(ctx, "ChannelManager CloseAll done")
 }
 
 type Channel struct {
@@ -269,7 +269,7 @@ func (c *Channel) close(ctx context.Context, msg string) {
 }
 
 func (c *Channel) passivelyClose(ctx context.Context, msg string) {
-	c.channelManager.RemoveChannel(ctx, c.channelID)
+	c.channelManager.CloseChannel(ctx, c.channelID)
 
 	c.remoteConn.Close()
 

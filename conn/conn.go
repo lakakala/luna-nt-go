@@ -62,7 +62,7 @@ func (conn *Conn) readLoop(ctx context.Context) {
 		frame, err := message.Decode(ctx, conn.conn)
 		if err != nil {
 			conn.readChan <- makeErrorRecvMessage(err)
-			return
+			break
 		}
 
 		msgID := frame.MsgID()
@@ -82,42 +82,36 @@ func (conn *Conn) readLoop(ctx context.Context) {
 				log.CtxErrorf(ctx, "Conn readLoop msgID %d can not find req", msgID)
 			}
 
-			conn.recvSendMessageResult(ctx, makeSuccessSendResult(frame))
+			conn.recvSendMessageResult(ctx, makeSendResult(frame))
 		} else {
-			conn.handleFrame(ctx, frame)
+			conn.readChan <- makeSuccessRecvMessage(frame, conn.writeChan)
 		}
-
 	}
-}
 
-func (conn *Conn) handleFrame(ctx context.Context, frame *message.Frame) {
-	conn.readChan <- makeSuccessRecvMessage(frame, conn.writeChan)
+	log.CtxInfof(ctx, "Conn readLoop end")
 }
 
 func (conn *Conn) writeLoop(ctx context.Context) {
 	for sendMsg := range conn.writeChan {
-		conn.handleSendMessage(ctx, sendMsg)
-	}
-}
+		msgID := sendMsg.frame.MsgID()
 
-func (conn *Conn) handleSendMessage(ctx context.Context, sendMsg *SendMessage) {
-	msgID := sendMsg.frame.MsgID()
+		msgType := message.MsgType(sendMsg.frame.Command())
+		if msgType == message.MessageTypeReq {
+			func() {
+				conn.mutex.Lock()
+				defer conn.mutex.Unlock()
 
-	msgType := message.MsgType(sendMsg.frame.Command())
-	if msgType == message.MessageTypeReq {
-		func() {
-			conn.mutex.Lock()
-			defer conn.mutex.Unlock()
+				conn.sendMsgMap[msgID] = sendMsg
+			}()
+		}
 
-			conn.sendMsgMap[msgID] = sendMsg
-		}()
-	}
-
-	if err := message.Encode(ctx, conn.conn, sendMsg.frame); err != nil {
-		conn.recvSendMessageResult(ctx, makeErrorSendResult(err))
-		return
+		if err := message.Encode(ctx, conn.conn, sendMsg.frame); err != nil {
+			conn.readChan <- makeErrorRecvMessage(err)
+			break
+		}
 	}
 
+	log.CtxInfof(ctx, "Conn writeLoop end")
 }
 
 func (conn *Conn) recvSendMessageResult(ctx context.Context, sendResult *SendResult) {
@@ -165,10 +159,7 @@ func (conn *Conn) Send(ctx context.Context, msg message.Message) (message.Messag
 
 		select {
 		case resp := <-respChan:
-			if resp.err != nil {
-				return nil, resp.err
-			}
-			return resp.frame.Msg(), nil
+			return resp.Frame().Msg(), nil
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
@@ -195,80 +186,6 @@ func (conn *Conn) Close(ctx context.Context) {
 	close(conn.writeChan)
 
 	conn.conn.Close()
-}
 
-type SendResult struct {
-	frame *message.Frame
-	err   error
-}
-
-func makeSuccessSendResult(frame *message.Frame) *SendResult {
-	return &SendResult{
-		frame: frame,
-	}
-}
-
-func makeErrorSendResult(err error) *SendResult {
-	return &SendResult{
-		err: err,
-	}
-}
-
-func (sendResult *SendResult) Frame() (*message.Frame, error) {
-	return sendResult.frame, sendResult.err
-}
-
-type SendMessage struct {
-	frame    *message.Frame
-	respChan chan *SendResult
-}
-
-func MakeSendMessage(frame *message.Frame) (*SendMessage, chan *SendResult) {
-
-	respChan := make(chan *SendResult, 1)
-
-	return &SendMessage{
-		frame:    frame,
-		respChan: respChan,
-	}, respChan
-}
-
-type RecvMessageContext struct {
-	frame    *message.Frame
-	respChan chan *SendMessage
-	err      error
-}
-
-func makeSuccessRecvMessage(frame *message.Frame, respChan chan *SendMessage) *RecvMessageContext {
-	return &RecvMessageContext{
-		frame:    frame,
-		respChan: respChan,
-	}
-}
-
-func makeErrorRecvMessage(err error) *RecvMessageContext {
-	return &RecvMessageContext{
-		err: err,
-	}
-}
-
-func (recvCtx *RecvMessageContext) Frame() (*message.Frame, error) {
-	return recvCtx.frame, recvCtx.err
-}
-
-func (recvCtx *RecvMessageContext) SendResp(ctx context.Context, resp message.Message) error {
-
-	reqFrame, err := recvCtx.Frame()
-	if err != nil {
-		return err
-	}
-	frame, err := message.MakeFrame(ctx, reqFrame.MsgID(), resp)
-	if err != nil {
-		return err
-	}
-
-	sendMsg, _ := MakeSendMessage(frame)
-
-	recvCtx.respChan <- sendMsg
-	return nil
+	log.CtxInfof(ctx, "Conn close done")
 }

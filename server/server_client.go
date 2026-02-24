@@ -16,8 +16,10 @@ import (
 type ClientStatus int
 
 const (
-	ClientStatusUninit ClientStatus = 1
-	ClientStatusInited ClientStatus = 2
+	ClientStatusUninit   ClientStatus = 1
+	ClientStatusInited   ClientStatus = 2
+	ClientStatusCloseing ClientStatus = 3
+	ClientStatusClosed   ClientStatus = 4
 )
 
 type Client struct {
@@ -66,6 +68,20 @@ func (c *Client) ClientID() uint64 {
 	defer c.mutex.Unlock()
 
 	return c.clientID
+}
+
+func (c *Client) setStatus(status ClientStatus) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	c.status = status
+}
+
+func (c *Client) GetStatus() ClientStatus {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	return c.status
 }
 
 func (c *Client) start(ctx context.Context) error {
@@ -142,7 +158,7 @@ func (c *Client) handleAuthReq(ctx context.Context, recvCtx *conn.RecvMessageCon
 		return nil
 	}
 
-	c.status = ClientStatusInited
+	c.setStatus(ClientStatusInited)
 
 	if err := recvCtx.SendResp(ctx, message.MakeAuthResp(0, "success")); err != nil {
 		return err
@@ -214,6 +230,10 @@ func (c *Client) handleChannelCloseReq(ctx context.Context, recvCtx *conn.RecvMe
 
 func (c *Client) connect(ctx context.Context, remoteConn net.Conn, localAddr string) error {
 
+	if c.GetStatus() != ClientStatusInited {
+		return errors.New("client not inited")
+	}
+
 	channelID := c.channelManager.NextChannelID()
 	resp, err := c.conn.Send(ctx, message.MakeConnectReq(channelID, localAddr, conn.BATCH_SIZE, conn.WINDOW_SIZE))
 	if err != nil {
@@ -243,7 +263,7 @@ func (c *Client) connect(ctx context.Context, remoteConn net.Conn, localAddr str
 func (c *Client) startRemoteListener(ctx context.Context) error {
 
 	for _, clientBind := range c.clientConf.Binds {
-		listener, err := newClientListener(ctx, clientBind.ID, clientBind.BindAddr, clientBind.LocalAddr, c)
+		listener, err := newClientListener(ctx, clientBind.ID, clientBind.BindAddr, clientBind.LocalAddr, c, c.clientListenerManager)
 		if err != nil {
 			return err
 		}
@@ -262,11 +282,15 @@ func (c *Client) startRemoteListener(ctx context.Context) error {
 }
 
 func (c *Client) Close(ctx context.Context) {
+	c.setStatus(ClientStatusCloseing)
+
 	c.channelManager.CloseAll(ctx)
 
+	c.setStatus(ClientStatusClosed)
 	c.conn.Close(ctx)
 
+	c.clientListenerManager.CloseAll(ctx)
 	c.clientManager.RemoveClient(ctx, c.ClientID())
 
-	log.CtxInfof(ctx, "")
+	log.CtxInfof(ctx, "Client %d close", c.ClientID())
 }
