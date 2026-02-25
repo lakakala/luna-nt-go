@@ -271,9 +271,18 @@ func (c *Client) connect(ctx context.Context, remoteConn net.Conn, localAddr str
 func (c *Client) startRemoteListener(ctx context.Context) error {
 
 	for _, clientBind := range c.clientConf.Binds {
-		listener, err := newClientListener(ctx, clientBind.ID, clientBind.BindAddr, clientBind.LocalAddr, c, c.clientListenerManager)
-		if err != nil {
-			return err
+
+		var listener ClientListener
+		if clientBind.Type == BindTypeTcp {
+			tcpClientListener, err := newTcpClientListener(ctx, clientBind.ID, clientBind.BindAddr, clientBind.LocalAddr, c, c.clientListenerManager)
+			if err != nil {
+				return err
+			}
+
+			listener = tcpClientListener
+		} else if clientBind.Type == BindTypeHttpProxy {
+		} else {
+			return errors.New("")
 		}
 
 		if err := c.clientListenerManager.AddListener(ctx, listener); err != nil {

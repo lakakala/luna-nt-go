@@ -6,10 +6,21 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	BindTypeTcp       = "tcp"
+	BindTypeHttpProxy = "http_proxy"
+)
+
 type ClientBind struct {
-	ID        uint64 `yaml:"id"`
+	ID   uint64 `yaml:"id"`
+	Type string `yaml:"type"`
+
 	BindAddr  string `yaml:"bind_addr"`
 	LocalAddr string `yaml:"local_addr"`
+
+	// for type = http_proxy
+	HttpProxyBindAddr      string   `yaml:"http_proxy_bind_addr"`
+	HttpProxyAllowHostList []string `yaml:"http_proxy_allow_hosts"`
 }
 
 type ClientConfig struct {
