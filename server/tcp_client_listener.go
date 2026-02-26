@@ -59,7 +59,9 @@ func (cl *TcpClientListener) Close(ctx context.Context) {
 }
 
 func (cl *TcpClientListener) handleConn(ctx context.Context, conn net.Conn) {
-	if err := cl.client.connect(ctx, conn, cl.localAddr); err != nil {
+
+	bufConn := NewBuferConn(conn)
+	if err := cl.client.connect(ctx, bufConn, cl.localAddr); err != nil {
 		log.CtxErrorf(ctx, "cl.client.Connect err: %v", err)
 		return
 	}

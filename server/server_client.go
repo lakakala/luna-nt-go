@@ -232,7 +232,7 @@ func (c *Client) handleChannelCloseReq(ctx context.Context, recvCtx *conn.RecvMe
 	return nil
 }
 
-func (c *Client) connect(ctx context.Context, remoteConn net.Conn, localAddr string) error {
+func (c *Client) connect(ctx context.Context, remoteConn *BuferConn, localAddr string) error {
 
 	if c.GetStatus() != ClientStatusInited {
 		return errors.New("client not inited")
@@ -281,6 +281,9 @@ func (c *Client) startRemoteListener(ctx context.Context) error {
 
 			listener = tcpClientListener
 		} else if clientBind.Type == BindTypeHttpProxy {
+			httpProxyListener := newHttpProxyListener(clientBind.ID, clientBind.HttpProxyBindAddr, c, c.clientListenerManager)
+
+			listener = httpProxyListener
 		} else {
 			return errors.New("")
 		}

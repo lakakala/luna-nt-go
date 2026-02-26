@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"net"
@@ -15,6 +14,7 @@ type HttpProxyListener struct {
 	bindAddr              string
 	client                *Client
 	clientListenerManager *ClientListenerManager
+	listener              net.Listener
 }
 
 func newHttpProxyListener(id uint64, bindAddr string, client *Client,
@@ -45,6 +45,8 @@ func (h *HttpProxyListener) doStart(ctx context.Context) error {
 		return err
 	}
 
+	h.listener = listener
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -64,9 +66,9 @@ func (h *HttpProxyListener) handleConn(ctx context.Context, conn net.Conn) {
 
 func (h *HttpProxyListener) doHandleConn(ctx context.Context, conn net.Conn) error {
 
-	readWriter := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
+	bufConn := NewBuferConn(conn)
 
-	req, err := http.ReadRequest(readWriter.Reader)
+	req, err := http.ReadRequest(bufConn.GetReader())
 	if err != nil {
 		return err
 	}
@@ -89,15 +91,15 @@ func (h *HttpProxyListener) doHandleConn(ctx context.Context, conn net.Conn) err
 		Request:      req,
 	}
 
-	if err := resp.Write(readWriter); err != nil {
+	if err := resp.Write(bufConn); err != nil {
 		return err
 	}
 
-	if err := readWriter.Flush(); err != nil {
+	if err := bufConn.Flush(); err != nil {
 		return err
 	}
 
-	if err := h.client.connect(ctx, nil, proxyAddr); err != nil {
+	if err := h.client.connect(ctx, bufConn, proxyAddr); err != nil {
 		return err
 	}
 
@@ -106,7 +108,9 @@ func (h *HttpProxyListener) doHandleConn(ctx context.Context, conn net.Conn) err
 
 // Close implements [ClientListener].
 func (h *HttpProxyListener) Close(ctx context.Context) {
-	panic("unimplemented")
+	h.listener.Close()
+
+	h.clientListenerManager.RemoveListener(h.ID())
 }
 
 var _ ClientListener = (*HttpProxyListener)(nil)

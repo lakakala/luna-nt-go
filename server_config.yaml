@@ -4,8 +4,14 @@ clients:
   1:
     id: 1
     binds:
-      - bind_addr: 0.0.0.0:3000
+      - id: 1
+        type: tcp
+        bind_addr: 0.0.0.0:3000
         local_addr: 192.168.124.200:22
+      - id: 2
+        type: http_proxy
+        http_proxy_bind_addr: 0.0.0.0:3001
+        http_proxy_allow_hosts: ["192"]
 
 
 

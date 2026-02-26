@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"net"
 	"sync"
 	"sync/atomic"
 
@@ -83,7 +82,7 @@ type Channel struct {
 	conn           *conn.Conn
 	channelManager *ChannelManager
 	channelID      uint64
-	remoteConn     *net.TCPConn
+	remoteConn     *BuferConn
 
 	writeChan chan []byte
 
@@ -95,7 +94,8 @@ type Channel struct {
 	writeStatus bool
 }
 
-func NewChannel(ctx context.Context, channelManager *ChannelManager, channelID uint64, batchSize uint64, windowSize uint64, remoteConn net.Conn, connection *conn.Conn) *Channel {
+func NewChannel(ctx context.Context, channelManager *ChannelManager, channelID uint64, batchSize uint64,
+	windowSize uint64, remoteConn *BuferConn, connection *conn.Conn) *Channel {
 
 	sendWindowManager := conn.NewChannelSendWindowManager(windowSize)
 	recvWindowManager := conn.NewChannelRecvWindowManager(windowSize)
@@ -105,7 +105,7 @@ func NewChannel(ctx context.Context, channelManager *ChannelManager, channelID u
 		conn:           connection,
 		channelManager: channelManager,
 		channelID:      channelID,
-		remoteConn:     remoteConn.(*net.TCPConn),
+		remoteConn:     remoteConn,
 
 		writeChan:         make(chan []byte, windowSize),
 		sendWindowManager: sendWindowManager,
@@ -205,6 +205,8 @@ func (c *Channel) start(ctx context.Context) {
 			c.recvWindowManager.Acquire()
 
 			_, err := c.remoteConn.Write(data)
+			c.remoteConn.Flush()
+
 			if err != nil {
 				log.CtxErrorf(ctx, "Channel chnnelID %d write data failed err %s", c.ChannelID(), err)
 				closeMsg = err.Error()
