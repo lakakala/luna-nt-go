@@ -131,10 +131,6 @@ func (c *Client) handleAuthReq(ctx context.Context, recvCtx *conn.RecvMessageCon
 	}
 	authReq := frame.Msg().Msg().(*pb.AuthReq)
 	log.CtxInfof(ctx, "authReq: %v", authReq)
-	if authReq.ClientId == nil {
-		log.CtxErrorf(ctx, "clientID is nil")
-		return nil
-	}
 
 	func() {
 		c.mutex.Lock()
@@ -153,7 +149,7 @@ func (c *Client) handleAuthReq(ctx context.Context, recvCtx *conn.RecvMessageCon
 	}
 
 	if err := c.startRemoteListener(ctx); err != nil {
-		if err := recvCtx.SendResp(ctx, message.MakeAuthResp(1, "client already exists")); err != nil {
+		if err := recvCtx.SendResp(ctx, message.MakeAuthResp(1, "start remote listener failed")); err != nil {
 			return err
 		}
 		return nil
@@ -222,6 +218,7 @@ func (c *Client) handleChannelCloseReq(ctx context.Context, recvCtx *conn.RecvMe
 	channel, err := c.channelManager.GetChannel(channelID)
 	if err != nil {
 		log.CtxWarnf(ctx, "Client %d handleChannelCloseReq unknown channelID %d", c.ClientID(), channelID)
+		recvCtx.SendResp(ctx, message.MakeChannelCloseResp(1, "unknwn channel_id"))
 		return nil
 	}
 
@@ -240,9 +237,9 @@ func (c *Client) connect(ctx context.Context, remoteConn *BuferConn, localAddr s
 
 	channelID := c.channelManager.NextChannelID()
 
-	channel := NewChannel(ctx, c.channelManager, channelID, conn.BATCH_SIZE, conn.WINDOW_SIZE, remoteConn, c.conn)
+	log.CtxInfof(ctx, "Client %d allocing channel localAddr %s channelID %d", c.ClientID(), localAddr, channelID)
 
-	log.CtxInfof(ctx, "Client %d alloc channel success channelID %d", c.ClientID(), channel.ChannelID())
+	channel := NewChannel(ctx, c.channelManager, channelID, conn.BATCH_SIZE, conn.WINDOW_SIZE, remoteConn, c.conn)
 
 	if err := c.channelManager.AddChannel(ctx, channel); err != nil {
 		return err
@@ -265,6 +262,8 @@ func (c *Client) connect(ctx context.Context, remoteConn *BuferConn, localAddr s
 
 	channel.start(ctx)
 
+	log.CtxInfof(ctx, "Client %d alloc channel success localAddr %s channelID %d", c.ClientID(), localAddr, channel.ChannelID())
+
 	return nil
 }
 
@@ -281,7 +280,7 @@ func (c *Client) startRemoteListener(ctx context.Context) error {
 
 			listener = tcpClientListener
 		} else if clientBind.Type == BindTypeHttpProxy {
-			httpProxyListener := newHttpProxyListener(clientBind.ID, clientBind.HttpProxyBindAddr, c, c.clientListenerManager)
+			httpProxyListener := newHttpProxyListener(clientBind.ID, clientBind.HttpProxyBindAddr, clientBind.HttpProxyAllowHostList, c, c.clientListenerManager)
 
 			listener = httpProxyListener
 		} else {

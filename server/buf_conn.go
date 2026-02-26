@@ -49,5 +49,5 @@ func (buf *BuferConn) Close() error {
 }
 
 func (buf *BuferConn) Flush() error {
-	return buf.Flush()
+	return buf.writer.Flush()
 }

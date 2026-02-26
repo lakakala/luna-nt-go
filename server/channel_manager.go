@@ -264,7 +264,7 @@ func (c *Channel) close(ctx context.Context, msg string) {
 
 	_, err := c.conn.Send(ctx, message.MakeChannelCloseReq(c.channelID, msg))
 	if err != nil {
-		log.CtxErrorf(ctx, "Channel chnnelID %d send close failed err %s", c.ChannelID(), err)
+		log.CtxErrorf(ctx, "Channel chnnelID %d send channel_close_req failed err %s", c.ChannelID(), err)
 	}
 
 	c.passivelyClose(ctx, msg)

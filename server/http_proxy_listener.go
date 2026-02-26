@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 
@@ -15,13 +16,21 @@ type HttpProxyListener struct {
 	client                *Client
 	clientListenerManager *ClientListenerManager
 	listener              net.Listener
+	allowHostMap          map[string]struct{}
 }
 
-func newHttpProxyListener(id uint64, bindAddr string, client *Client,
+func newHttpProxyListener(id uint64, bindAddr string, allowHostList []string, client *Client,
 	clientListenerManager *ClientListenerManager) ClientListener {
+
+	allowHostMap := make(map[string]struct{})
+	for _, alloallowHost := range allowHostList {
+		allowHostMap[alloallowHost] = struct{}{}
+	}
+
 	return &HttpProxyListener{
 		id:                    id,
 		bindAddr:              bindAddr,
+		allowHostMap:          allowHostMap,
 		client:                client,
 		clientListenerManager: clientListenerManager,
 	}
@@ -74,6 +83,10 @@ func (h *HttpProxyListener) doHandleConn(ctx context.Context, conn net.Conn) err
 	}
 
 	proxyAddr := req.Host
+
+	if _, ok := h.allowHostMap[proxyAddr]; !ok {
+		return errors.New(fmt.Sprintf("proxyAddr %s not allow", proxyAddr))
+	}
 
 	if req.Method != http.MethodConnect {
 		return errors.New("")

@@ -163,7 +163,8 @@ func (cli *Client) auth(ctx context.Context) error {
 func (cli *Client) handleConnect(ctx context.Context, recvCtx *conn.RecvMessageContext) error {
 
 	if cli.GetStatus() != ClientStatusInited {
-		return errors.New("client not inited")
+		recvCtx.SendResp(ctx, message.MakeConnectResp(-1, "client not inited"))
+		return nil
 	}
 
 	frame, err := recvCtx.Frame()
@@ -189,9 +190,10 @@ func (cli *Client) handleConnect(ctx context.Context, recvCtx *conn.RecvMessageC
 		return nil
 	}
 
-	localConn.start(ctx)
-
 	recvCtx.SendResp(ctx, message.MakeConnectResp(0, ""))
+
+	go localConn.start(ctx)
+
 	return nil
 }
 

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/lakakala/luna-nt-go/conn"
 	"github.com/lakakala/luna-nt-go/message"
@@ -82,6 +83,8 @@ type LocalConn struct {
 
 	channelManager *ChannelManager
 
+	addr string
+
 	localConn *net.TCPConn
 	conn      *conn.Conn
 	channelID uint64
@@ -103,17 +106,14 @@ func (lc *LocalConn) GetChannelID() uint64 {
 
 func NewLocalConn(ctx context.Context, channelManager *ChannelManager, remoteConn *conn.Conn, addr string, channelID uint64, windowSize uint64, batchSize uint64) (*LocalConn, error) {
 
-	connection, err := net.Dial("tcp", addr)
-	if err != nil {
-		return nil, err
-	}
-
 	localConn := &LocalConn{
 		mutex: sync.Mutex{},
 
 		channelManager: channelManager,
 
-		localConn: connection.(*net.TCPConn),
+		addr: addr,
+
+		localConn: nil,
 		channelID: channelID,
 		conn:      remoteConn,
 
@@ -129,6 +129,13 @@ func NewLocalConn(ctx context.Context, channelManager *ChannelManager, remoteCon
 }
 
 func (lc *LocalConn) start(ctx context.Context) {
+	connection, err := net.DialTimeout("tcp", lc.addr, 3*time.Second)
+	if err != nil {
+		// lc.close(ctx, "connect failed")
+		return
+	}
+
+	lc.localConn = connection.(*net.TCPConn)
 
 	go func() {
 
@@ -158,7 +165,7 @@ func (lc *LocalConn) start(ctx context.Context) {
 
 					_, err := lc.conn.Send(ctx, message.MakeDataNoti(lc.channelID, nil))
 					if err != nil {
-						log.CtxErrorf(ctx, "LocalConn channelID %d send close failed err %s", lc.channelID, err)
+						log.CtxErrorf(ctx, "LocalConn channelID %d send data_niti failed err %s", lc.channelID, err)
 						gracefulClose = false
 						closeMsg = err.Error()
 					} else {
@@ -263,7 +270,7 @@ func (lc *LocalConn) close(ctx context.Context, msg string) {
 
 	_, err := lc.conn.Send(ctx, message.MakeChannelCloseReq(lc.channelID, msg))
 	if err != nil {
-		log.CtxErrorf(ctx, "LocalConn channelID %d send close failed err %s", lc.channelID, err)
+		log.CtxErrorf(ctx, "LocalConn channelID %d send channel_close_req failed err %s", lc.channelID, err)
 	}
 
 	lc.passivelyClose(ctx, msg)
@@ -276,7 +283,9 @@ func (lc *LocalConn) passivelyClose(ctx context.Context, msg string) {
 
 	log.CtxInfof(ctx, "LocalConn channelID %d close msg %s", lc.channelID, msg)
 
-	lc.localConn.Close()
+	if lc.localConn != nil {
+		lc.localConn.Close()
+	}
 }
 
 func (lc *LocalConn) writeData(ctx context.Context, data []byte) error {

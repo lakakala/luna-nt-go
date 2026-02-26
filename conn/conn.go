@@ -154,7 +154,7 @@ func (conn *Conn) Send(ctx context.Context, msg message.Message) (message.Messag
 	msgType := message.MsgType(msg.Cmd())
 	if msgType == message.MessageTypeReq {
 
-		ctx, cancel := context.WithTimeout(ctx, time.Second*20)
+		ctx, cancel := context.WithTimeout(ctx, time.Second*2)
 		defer cancel()
 
 		select {
@@ -165,6 +165,7 @@ func (conn *Conn) Send(ctx context.Context, msg message.Message) (message.Messag
 
 			return resp.Frame().Msg(), nil
 		case <-ctx.Done():
+			log.CtxErrorf(ctx, "Conn Send msgID %d timeout", msgID)
 			return nil, ctx.Err()
 		}
 	} else if msgType == message.MessageTypeNoti {
@@ -188,10 +189,10 @@ func (conn *Conn) Accept(ctx context.Context) (*RecvMessageContext, error) {
 func (conn *Conn) Close(ctx context.Context) {
 	conn.closeSendMsgMap(ctx)
 
+	conn.conn.Close()
+
 	close(conn.readChan)
 	close(conn.writeChan)
-
-	conn.conn.Close()
 
 	log.CtxInfof(ctx, "Conn close done")
 }
