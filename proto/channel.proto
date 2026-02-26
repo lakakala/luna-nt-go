@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+option go_package = "./pb";
+
+message BaseResp {
+  optional int32  code = 1;
+  optional string msg  = 2;
+}
+
+message CreateChannelReq {
+  optional uint64 channel_id  = 1;
+  optional uint64 window_size = 2;
+  optional uint64 priority = 3;
+}
+
+message CreateChannelResp {
+  optional BaseResp base_resp = 255;
+}
+
+message CloseChannelReq {
+  optional uint64 channel_id  = 1;
+}
+
+message CloseChannelResp {
+  optional BaseResp base_resp = 255;
+}
+
+
+message ChannelDataNoti {
+  optional uint64 channel_id = 1;
+  optional bytes  data       = 2;
+}
+
+message ChannelWindowUpdateNoti {
+  optional uint64 channel_id = 1;
+  optional uint64 window_size = 2;
+}
