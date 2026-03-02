@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"io"
 	"net"
 	"sync"
 
@@ -62,12 +61,12 @@ func (cl *TcpClientListener) Close(ctx context.Context) {
 
 func (cl *TcpClientListener) handleConn(ctx context.Context, conn net.Conn) {
 
-	if err := cl.doHandleConn(ctx, conn); err != nil {
+	if err := cl.doHandleConn(ctx, conn.(*net.TCPConn)); err != nil {
 		log.CtxErrorf(ctx, "doHandleConn failed err %s", err)
 	}
 
 }
-func (cl *TcpClientListener) doHandleConn(ctx context.Context, conn net.Conn) error {
+func (cl *TcpClientListener) doHandleConn(ctx context.Context, conn *net.TCPConn) error {
 
 	channel, err := cl.client.connect(ctx, cl.localAddr)
 	if err != nil {
@@ -79,18 +78,54 @@ func (cl *TcpClientListener) doHandleConn(ctx context.Context, conn net.Conn) er
 
 	go func() {
 
-		_, err = io.Copy(channel, conn)
-		if err != nil {
-			log.CtxErrorf(ctx, "io.Copy channel %d -> conn %s failed err %s", channel.ChannelID(), conn.RemoteAddr().String(), err)
+		buf := make([]byte, 10)
+		for {
+			readN, readErr := channel.Read(buf)
+
+			_, writeErr := conn.Write(buf[:readN])
+
+			if readErr != nil {
+				break
+			}
+
+			if writeErr != nil {
+				break
+			}
 		}
+
+		// _, err = io.Copy(channel, conn)
+		// if err != nil {
+		// 	log.CtxErrorf(ctx, "io.Copy channel %d -> conn %s failed err %s", channel.ChannelID(), conn.RemoteAddr().String(), err)
+		// }
+
+		// channel.CloseRead()
+		// conn.CloseWrite()
 		waitGroup.Done()
 	}()
 
 	go func() {
-		_, err = io.Copy(conn, channel)
-		if err != nil {
-			log.CtxErrorf(ctx, "io.Copy conn %s -> channel %d failed err %s", conn.RemoteAddr().String(), channel.ChannelID(), err)
+		buf := make([]byte, 1024)
+
+		for {
+			readN, readErr := conn.Read(buf)
+
+			_, writeErr := channel.Write(buf[:readN])
+
+			if readErr != nil {
+				break
+			}
+
+			if writeErr != nil {
+				break
+			}
 		}
+		// _, err = io.Copy(conn, channel)
+		// if err != nil {
+		// 	log.CtxErrorf(ctx, "io.Copy conn %s -> channel %d failed err %s", conn.RemoteAddr().String(), channel.ChannelID(), err)
+		// }
+
+		// channel.CloseWrite()
+		// channel.CloseRead()
 		waitGroup.Done()
 	}()
 

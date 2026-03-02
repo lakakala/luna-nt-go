@@ -295,7 +295,7 @@ func (conn *Conn) GetChannel(ctx context.Context, channelID uint64) *Channel {
 
 func (conn *Conn) CreateChannel(ctx context.Context) (*Channel, error) {
 
-	var windowSize uint64 = 30
+	var windowSize uint64 = 80
 
 	channelID := conn.channelManager.NextChannelID()
 

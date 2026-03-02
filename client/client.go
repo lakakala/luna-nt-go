@@ -97,8 +97,6 @@ func (cli *Client) doStart(ctx context.Context) error {
 		cli.conn = conn
 	}()
 
-	cli.conn = conn
-
 	err = cli.auth(ctx)
 	if err != nil {
 		return err

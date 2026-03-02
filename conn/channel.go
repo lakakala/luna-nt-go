@@ -54,7 +54,7 @@ func (readBuf *ReadBuf) Read(b []byte) (int, error) {
 		return 0, err
 	}
 
-	log.Infof("ReadBuf.Read n %d data", n)
+	log.Infof("ReadBuf.Read channelID %d len %d data %v", readBuf.channelID, n, b[:n])
 
 	return n, nil
 }
@@ -63,7 +63,7 @@ func (readBuf *ReadBuf) check() {
 	readBuf.mutex.Lock()
 	defer readBuf.mutex.Unlock()
 
-	log.CtxInfof(readBuf.ctx, "ReadBuf.check r %d", readBuf.r)
+	log.CtxInfof(readBuf.ctx, "ReadBuf.check channelID %d send ack %d", readBuf.channelID, readBuf.r)
 	readBuf.conn.Send(readBuf.ctx, message.MakeChanelWindowUpdateNoti(readBuf.channelID, 0, uint64(readBuf.r)))
 }
 
@@ -109,6 +109,7 @@ func (readBuf *ReadBuf) doRead(b []byte) (int, error) {
 }
 
 func (readBuf *ReadBuf) put(ctx context.Context, code uint32, b []byte) error {
+	log.Infof("ReadBuf.put channelID %d code %d len %d data %v", readBuf.channelID, code, len(b), b)
 
 	if err := func() error {
 		readBuf.mutex.Lock()
@@ -130,6 +131,7 @@ func (readBuf *ReadBuf) put(ctx context.Context, code uint32, b []byte) error {
 }
 
 func (readBuf *ReadBuf) doPut(ctx context.Context, code uint32, b []byte) error {
+	log.CtxInfof(ctx, "ReadBuf.doPut channelID %d code %d len %d data %v", readBuf.channelID, code, len(b), b)
 	if code != 0 {
 
 		log.CtxInfof(readBuf.ctx, "ReadBuf.doPut channelID %d close", readBuf.channelID)
@@ -166,6 +168,12 @@ func (readBuf *ReadBuf) doPut(ctx context.Context, code uint32, b []byte) error 
 		}
 
 		n2 := copy(readBuf.buf[0:readIndex], b[n1:])
+
+		if n1+n2 != len(b) {
+			return errors.New("ReadBuf.doPut n1+n2 != len(b)")
+		}
+
+		log.CtxInfof(readBuf.ctx, "ReadBuf.doPut channelID %d write %d data", readBuf.channelID, n1+n2)
 		readBuf.w += n2
 
 		return nil
@@ -235,30 +243,17 @@ func newWriteBuf(ctx context.Context, channelID uint64, conn *Conn, cap int) *Wr
 
 func (writeBuf *WriteBuf) Write(b []byte) (int, error) {
 
-	log.Infof("WriteBuf.Write %d data", len(b))
-
-	// 将b 按writeBuf.cap/2 切分
-	bufs := make([][]byte, 0)
-
-	groupSize := writeBuf.cap / 10
-	for len(b) > 0 {
-		if len(b) > groupSize {
-			bufs = append(bufs, b[:groupSize])
-			b = b[groupSize:]
-		} else {
-			bufs = append(bufs, b)
-			b = nil
-		}
-	}
+	log.Infof("WriteBuf.Write channelID %d len %d data %v", writeBuf.channelID, len(b), b)
 
 	totalWrite := 0
-	for _, buf := range bufs {
-		n, err := writeBuf.doWrite(buf)
+	for len(b) > 0 {
+		n, err := writeBuf.doWrite(b)
+		totalWrite += n
 		if err != nil {
-			return n, err
+			return totalWrite, err
 		}
 
-		totalWrite += n
+		b = b[n:]
 	}
 
 	return totalWrite, nil
@@ -279,28 +274,36 @@ func (writeBuf *WriteBuf) doWrite(b []byte) (int, error) {
 
 		writeRemaining := writeBuf.writeRemaining()
 
-		if writeRemaining < len(b) {
+		if writeRemaining == 0 {
 			writeBuf.cond.Wait()
 			continue
 		}
 
-		_, err := writeBuf.conn.Send(writeBuf.ctx, message.MakeDataNoti(writeBuf.channelID, 0, b))
+		sendLen := len(b)
+		if sendLen > writeRemaining {
+			sendLen = writeRemaining
+		}
+
+		sendData := make([]byte, sendLen)
+
+		copy(sendData, b)
+
+		_, err := writeBuf.conn.Send(writeBuf.ctx, message.MakeDataNoti(writeBuf.channelID, 0, sendData))
 		if err != nil {
 			return 0, err
 		}
 
-		writeBuf.w += len(b)
+		writeBuf.w += len(sendData)
 
-		return len(b), nil
+		return len(sendData), nil
 	}
-
 }
 
-func (writeBuf *WriteBuf) Ack(ctx context.Context, code uint32, readIndex int64) {
+func (writeBuf *WriteBuf) ack(ctx context.Context, code uint32, readIndex int64) {
 	writeBuf.mutex.Lock()
 	defer writeBuf.mutex.Unlock()
 
-	log.CtxInfof(ctx, "WriteBuf.Ack oringinalR %d  newR %d", writeBuf.r, readIndex)
+	log.CtxInfof(ctx, "WriteBuf.Ack channelID %d localR %d  remoteR %d", writeBuf.channelID, writeBuf.r, readIndex)
 	writeBuf.r = int(readIndex)
 
 	if code != 0 {
@@ -371,7 +374,7 @@ func (channel *Channel) put(ctx context.Context, code uint32, b []byte) {
 }
 
 func (channel *Channel) Ack(ctx context.Context, code uint32, windowSize int64) {
-	channel.writeBuf.Ack(ctx, code, windowSize)
+	channel.writeBuf.ack(ctx, code, windowSize)
 }
 
 func (channel *Channel) Read(b []byte) (n int, err error) {

@@ -127,9 +127,6 @@ func (h *HttpProxyListener) doHandleConn(ctx context.Context, conn net.Conn) err
 						log.CtxWarnf(ctx, "HttpProxyListener.handleConn io.Copy failed err %s", err)
 					}
 
-					bufConn.conn.CloseRead()
-					channel.CloseWrite()
-
 					waitGroup.Done()
 				}()
 
@@ -139,14 +136,12 @@ func (h *HttpProxyListener) doHandleConn(ctx context.Context, conn net.Conn) err
 						log.CtxWarnf(ctx, "HttpProxyListener.handleConn io.Copy failed err %s", err)
 					}
 
-					bufConn.Flush()
-					bufConn.conn.CloseWrite()
-					channel.CloseRead()
 					waitGroup.Done()
 				}()
 				// break
 				waitGroup.Wait()
 
+				channel.Close()
 				return nil
 			}(); err != nil {
 				log.CtxWarnf(ctx, "HttpProxyListener.handleConn failed err %s", err)
