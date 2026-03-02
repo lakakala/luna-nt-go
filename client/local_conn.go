@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/lakakala/luna-nt-go/conn"
-	"github.com/lakakala/luna-nt-go/message"
 	"github.com/lakakala/luna-nt-go/utils/log"
 )
 
@@ -79,220 +78,70 @@ func (cm *ChannelManager) CloseAll(ctx context.Context) {
 }
 
 type LocalConn struct {
-	mutex sync.Mutex
-
-	channelManager *ChannelManager
-
-	addr string
-
-	localConn *net.TCPConn
-	conn      *conn.Conn
-	channelID uint64
-
-	writeChan chan []byte
-
-	batchSize uint64
-
-	recvWindowManager *conn.ChannelRecvWindowManager
-	sendWindowManager *conn.ChannelSendWindowManager
-
-	readStatus  bool
-	writeStatus bool
+	localAddr string
+	channel   *conn.Channel
 }
 
 func (lc *LocalConn) GetChannelID() uint64 {
-	return lc.channelID
+	return lc.channel.ChannelID()
 }
 
-func NewLocalConn(ctx context.Context, channelManager *ChannelManager, remoteConn *conn.Conn, addr string, channelID uint64, windowSize uint64, batchSize uint64) (*LocalConn, error) {
+func NewLocalConn(ctx context.Context, channel *conn.Channel, localAddr string) (*LocalConn, error) {
 
 	localConn := &LocalConn{
-		mutex: sync.Mutex{},
-
-		channelManager: channelManager,
-
-		addr: addr,
-
-		localConn: nil,
-		channelID: channelID,
-		conn:      remoteConn,
-
-		writeChan: make(chan []byte, windowSize),
-
-		batchSize: batchSize,
-
-		recvWindowManager: conn.NewChannelRecvWindowManager(windowSize),
-		sendWindowManager: conn.NewChannelSendWindowManager(windowSize),
+		localAddr: localAddr,
+		channel:   channel,
 	}
 
 	return localConn, nil
 }
 
 func (lc *LocalConn) start(ctx context.Context) {
-	connection, err := net.DialTimeout("tcp", lc.addr, 3*time.Second)
-	if err != nil {
-		// lc.close(ctx, "connect failed")
-		return
+	if err := lc.doStart(ctx); err != nil {
+		log.CtxErrorf(ctx, "LocalConn start failed err %s", err)
 	}
-
-	lc.localConn = connection.(*net.TCPConn)
-
-	go func() {
-
-		gracefulClose := false
-		var closeMsg string
-		for {
-
-			lc.sendWindowManager.Acquire()
-
-			buf := make([]byte, lc.batchSize)
-
-			n, re := lc.localConn.Read(buf)
-			data := buf[:n]
-
-			_, err := lc.conn.Send(ctx, message.MakeDataNoti(lc.channelID, data))
-
-			if err != nil {
-				log.CtxErrorf(ctx, "LocalConn channelID %d read data failed err %s", lc.channelID, err)
-				closeMsg = err.Error()
-				gracefulClose = false
-				break
-			}
-
-			if re != nil {
-
-				if re == io.EOF {
-
-					_, err := lc.conn.Send(ctx, message.MakeDataNoti(lc.channelID, nil))
-					if err != nil {
-						log.CtxErrorf(ctx, "LocalConn channelID %d send data_niti failed err %s", lc.channelID, err)
-						gracefulClose = false
-						closeMsg = err.Error()
-					} else {
-						gracefulClose = true
-					}
-				} else {
-					closeMsg = re.Error()
-					gracefulClose = false
-				}
-
-				log.CtxErrorf(ctx, "LocalConn channelID %d read failed err %s", lc.channelID, re)
-				break
-			}
-
-		}
-
-		if gracefulClose {
-			func() {
-				lc.mutex.Lock()
-				defer lc.mutex.Unlock()
-
-				lc.readStatus = true
-			}()
-
-			lc.tryGracefulClose(ctx)
-		} else {
-			lc.close(ctx, closeMsg)
-		}
-
-	}()
-
-	go func() {
-
-		gracefulClose := false
-		var closeMsg string
-
-		for data := range lc.writeChan {
-
-			if len(data) == 0 {
-
-				lc.localConn.CloseWrite()
-				gracefulClose = true
-				break
-			}
-
-			lc.recvWindowManager.Acquire()
-
-			_, err := lc.localConn.Write(data)
-
-			if err != nil {
-				log.CtxErrorf(ctx, "LocalConn channelID %d write data failed err %s", lc.channelID, err)
-				closeMsg = err.Error()
-				gracefulClose = false
-				break
-			}
-
-			needAckWindowSize := lc.recvWindowManager.Release(0)
-			if needAckWindowSize > 0 {
-				_, err := lc.conn.Send(ctx, message.MakeChanelWindowUpdateNoti(lc.channelID, needAckWindowSize))
-				if err != nil {
-					log.CtxErrorf(ctx, "LocalConn chnnelID %d send window update failed err %s", lc.channelID, err)
-					closeMsg = err.Error()
-					gracefulClose = false
-					break
-				}
-
-			}
-
-		}
-
-		if gracefulClose {
-
-			func() {
-				lc.mutex.Lock()
-				defer lc.mutex.Unlock()
-
-				lc.writeStatus = true
-			}()
-
-			lc.tryGracefulClose(ctx)
-		} else {
-			lc.close(ctx, closeMsg)
-		}
-	}()
 }
 
-func (lc *LocalConn) tryGracefulClose(ctx context.Context) {
+func (lc *LocalConn) doStart(ctx context.Context) error {
+	connection, err := net.DialTimeout("tcp", lc.localAddr, 3*time.Second)
+	if err != nil {
+		return err
+	}
 
-	gracefulClose := func() bool {
-		lc.mutex.Lock()
-		defer lc.mutex.Unlock()
+	tcpConn := connection.(*net.TCPConn)
 
-		return lc.readStatus && lc.writeStatus
+	waitGroup := sync.WaitGroup{}
+	waitGroup.Add(2)
+	go func() {
+		_, err := io.Copy(lc.channel, tcpConn)
+		if err != nil {
+			log.CtxErrorf(ctx, "LocalConn  channelID %d -> localAddr %s copy data failed err %s", lc.channel.ChannelID(), lc.localAddr, err)
+		}
+
+		tcpConn.CloseRead()
+		lc.channel.CloseWrite()
+		waitGroup.Done()
 	}()
 
-	if gracefulClose {
-		lc.close(ctx, "graceful close")
-	}
+	go func() {
+
+		_, err := io.Copy(tcpConn, lc.channel)
+		if err != nil {
+			log.CtxErrorf(ctx, "LocalConn localAddr %s -> channelID %d copy data failed err %s", lc.localAddr, lc.channel.ChannelID(), err)
+		}
+
+		tcpConn.CloseWrite()
+		lc.channel.CloseRead()
+		waitGroup.Done()
+	}()
+
+	waitGroup.Wait()
+
+	log.CtxInfof(ctx, "LocalConn channelID %d -> localAddr %s close success", lc.channel.ChannelID(), lc.localAddr)
+
+	return nil
 }
 
 func (lc *LocalConn) close(ctx context.Context, msg string) {
 
-	_, err := lc.conn.Send(ctx, message.MakeChannelCloseReq(lc.channelID, msg))
-	if err != nil {
-		log.CtxErrorf(ctx, "LocalConn channelID %d send channel_close_req failed err %s", lc.channelID, err)
-	}
-
-	lc.passivelyClose(ctx, msg)
-
-	log.CtxInfof(ctx, "LocalConn channelID %d close done msg %s", lc.channelID, msg)
-}
-
-func (lc *LocalConn) passivelyClose(ctx context.Context, msg string) {
-	lc.channelManager.RemoveChannel(ctx, lc.channelID)
-
-	log.CtxInfof(ctx, "LocalConn channelID %d close msg %s", lc.channelID, msg)
-
-	if lc.localConn != nil {
-		lc.localConn.Close()
-	}
-}
-
-func (lc *LocalConn) writeData(ctx context.Context, data []byte) error {
-	lc.writeChan <- data
-	return nil
-}
-
-func (lc *LocalConn) releaseWindow(ctx context.Context, ackWindowSize uint64) {
-	lc.sendWindowManager.Release(ackWindowSize)
 }

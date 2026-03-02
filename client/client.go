@@ -111,31 +111,13 @@ func (cli *Client) doStart(ctx context.Context) error {
 			break
 		}
 
-		if err := func() error {
-			frame, err := recvCtx.Frame()
-			if err != nil {
-				return err
-			}
+		frame := recvCtx.Frame()
 
-			switch frame.Command() {
-			case message.COMMAND_CONNECT_REQ:
-				return cli.handleConnect(ctx, recvCtx)
-
-			case message.COMMAND_DATA_NOTI:
-				return cli.handleData(ctx, recvCtx)
-
-			case message.COMMAND_CHANNEL_WINDOW_UPDATE_NOTI:
-				return cli.handleChannelWindowUpdate(ctx, recvCtx)
-
-			case message.COMMAND_CHANNEL_CLOSE_REQ:
-				return cli.handleChannelCloseReq(ctx, recvCtx)
-
-			default:
-				return errors.New(fmt.Sprintf("unknown command %d", frame.Command()))
-			}
-		}(); err != nil {
-			log.CtxWarnf(ctx, "Client %d accpet handler failed err %s", cli.conf.ClientID, err)
-			return err
+		switch frame.Command() {
+		case message.COMMAND_CONNECT_REQ:
+			cli.handleConnect(ctx, recvCtx)
+		default:
+			return errors.New(fmt.Sprintf("unknown command %d", frame.Command()))
 		}
 	}
 
@@ -160,103 +142,37 @@ func (cli *Client) auth(ctx context.Context) error {
 	return nil
 }
 
-func (cli *Client) handleConnect(ctx context.Context, recvCtx *conn.RecvMessageContext) error {
+func (cli *Client) handleConnect(ctx context.Context, recvCtx *conn.RecvMessageContext) {
 
 	if cli.GetStatus() != ClientStatusInited {
 		recvCtx.SendResp(ctx, message.MakeConnectResp(-1, "client not inited"))
-		return nil
+		return
 	}
 
-	frame, err := recvCtx.Frame()
-	if err != nil {
-		return err
-	}
+	frame := recvCtx.Frame()
 
 	req := frame.Msg().Msg().(*pb.ConnectReq)
 
 	channelID := req.GetChannelId()
+	localAddr := req.GetAddr()
 
-	log.CtxInfof(ctx, "Client %d handleConnect channelID %d localAddr %s", cli.conf.ClientID, channelID, req.GetAddr())
+	channel := cli.conn.GetChannel(ctx, channelID)
+	if channel == nil {
+		recvCtx.SendResp(ctx, message.MakeConnectResp(-1, "unknown channelID"))
+		return
+	}
 
-	localConn, err := NewLocalConn(ctx, cli.channelManager, cli.conn, req.GetAddr(), channelID, req.GetWindowSize(), req.GetBatchSize())
+	localConn, err := NewLocalConn(ctx, channel, localAddr)
 	if err != nil {
 		recvCtx.SendResp(ctx, message.MakeConnectResp(-1, err.Error()))
-		return nil
+		return
 	}
-
-	if err := cli.channelManager.AddChannel(ctx, localConn); err != nil {
-		log.CtxWarnf(ctx, "Client %d handleConnect unknown channelID %d", cli.conf.ClientID, channelID)
-		recvCtx.SendResp(ctx, message.MakeConnectResp(-1, err.Error()))
-		return nil
-	}
-
-	recvCtx.SendResp(ctx, message.MakeConnectResp(0, ""))
 
 	go localConn.start(ctx)
 
-	return nil
-}
+	recvCtx.SendResp(ctx, message.MakeConnectResp(0, "success"))
 
-func (cli *Client) handleData(ctx context.Context, recvCtx *conn.RecvMessageContext) error {
-	frame, err := recvCtx.Frame()
-	if err != nil {
-		return err
-	}
-
-	dataNoti := frame.Msg().Msg().(*pb.DataNoti)
-
-	localConn, err := cli.channelManager.GetChannel(dataNoti.GetChannelId())
-	if err != nil {
-		log.CtxWarnf(ctx, "Client %d handleData unknown channelID %d", cli.conf.ClientID, dataNoti.GetChannelId())
-		return nil
-	}
-
-	if err := localConn.writeData(ctx, dataNoti.Data); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (cli *Client) handleChannelWindowUpdate(ctx context.Context, recvCtx *conn.RecvMessageContext) error {
-	frame, err := recvCtx.Frame()
-	if err != nil {
-		return err
-	}
-
-	windowUpdateNoti := frame.Msg().Msg().(*pb.ChannelWindowUpdateNoti)
-
-	localConn, err := cli.channelManager.GetChannel(windowUpdateNoti.GetChannelId())
-	if err != nil {
-		log.CtxWarnf(ctx, "Client %d handleChannelWindowUpdate unknown channelID %d", cli.conf.ClientID, windowUpdateNoti.GetChannelId())
-		return nil
-	}
-
-	localConn.releaseWindow(ctx, windowUpdateNoti.GetWindowSize())
-
-	return nil
-}
-
-func (cli *Client) handleChannelCloseReq(ctx context.Context, recvCtx *conn.RecvMessageContext) error {
-	frame, err := recvCtx.Frame()
-	if err != nil {
-		return err
-	}
-
-	closeReq := frame.Msg().Msg().(*pb.CloseChannelReq)
-
-	localConn, err := cli.channelManager.GetChannel(closeReq.GetChannelId())
-	if err != nil {
-		log.CtxWarnf(ctx, "Client %d unknown channelID %d", cli.conf.ClientID, closeReq.GetChannelId())
-		return nil
-	}
-
-	localConn.passivelyClose(ctx, closeReq.GetMsg())
-
-	recvCtx.SendResp(ctx, message.MakeChannelCloseResp(0, "success"))
-
-	log.CtxInfof(ctx, "Client %d handleChannelCloseReq channelID %d msg %s success", cli.conf.ClientID, closeReq.GetChannelId(), closeReq.GetMsg())
-	return nil
+	log.CtxInfof(ctx, "Client %d handleConnect channelID %d localAddr %s success", cli.conf.ClientID, channelID, localAddr)
 }
 
 func (cli *Client) Close(ctx context.Context) {

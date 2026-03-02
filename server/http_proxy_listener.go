@@ -1,11 +1,12 @@
 package server
 
 import (
+	"bufio"
 	"context"
-	"errors"
-	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"sync"
 
 	"github.com/lakakala/luna-nt-go/utils/log"
 )
@@ -77,45 +78,132 @@ func (h *HttpProxyListener) doHandleConn(ctx context.Context, conn net.Conn) err
 
 	bufConn := NewBuferConn(conn)
 
-	req, err := http.ReadRequest(bufConn.GetReader())
-	if err != nil {
-		return err
+	for {
+		req, err := http.ReadRequest(bufConn.GetReader())
+		if err != nil {
+			return err
+		}
+
+		proxyAddr := req.Host
+
+		if _, ok := h.allowHostMap[proxyAddr]; !ok {
+			// return errors.New(fmt.Sprintf("proxyAddr %s not allow", proxyAddr))
+		}
+
+		if req.Method == http.MethodConnect {
+			// return errors.New(fmt.Sprintf("proxyAddr %s not support CONNECT method", proxyAddr))
+
+			if err := func() error {
+				resp := http.Response{
+					Status:       http.StatusText(http.StatusOK),
+					StatusCode:   http.StatusOK,
+					Proto:        "HTTP/1.1",
+					ProtoMajor:   1,
+					ProtoMinor:   1,
+					Header:       make(http.Header),
+					Uncompressed: false,
+					Trailer:      http.Header{},
+					Request:      req,
+				}
+
+				if err := resp.Write(bufConn); err != nil {
+					return err
+				}
+
+				if err := bufConn.Flush(); err != nil {
+					return err
+				}
+
+				channel, err := h.client.connect(ctx, proxyAddr)
+				if err != nil {
+					return err
+				}
+
+				waitGroup := sync.WaitGroup{}
+				waitGroup.Add(2)
+				go func() {
+					_, err := io.Copy(channel, bufConn)
+					if err != nil {
+						log.CtxWarnf(ctx, "HttpProxyListener.handleConn io.Copy failed err %s", err)
+					}
+
+					bufConn.conn.CloseRead()
+					channel.CloseWrite()
+
+					waitGroup.Done()
+				}()
+
+				go func() {
+					_, err := io.Copy(bufConn, channel)
+					if err != nil {
+						log.CtxWarnf(ctx, "HttpProxyListener.handleConn io.Copy failed err %s", err)
+					}
+
+					bufConn.Flush()
+					bufConn.conn.CloseWrite()
+					channel.CloseRead()
+					waitGroup.Done()
+				}()
+				// break
+				waitGroup.Wait()
+
+				return nil
+			}(); err != nil {
+				log.CtxWarnf(ctx, "HttpProxyListener.handleConn failed err %s", err)
+			}
+
+			log.CtxInfof(ctx, "HttpProxyListener handleConn connect to %s end", proxyAddr)
+			break
+		}
+
+		req.Header.Set("Proxy-Connection", "Connection")
+
+		proxyConn, err := h.client.connect(ctx, proxyAddr)
+		if err != nil {
+			return err
+		}
+
+		proxyReader := bufio.NewReader(proxyConn)
+
+		err = func() error {
+			url := req.URL
+
+			newUrl, err := url.Parse(url.Path + "?" + url.RawQuery + "#" + url.RawFragment)
+			if err != nil {
+				return err
+			}
+
+			log.CtxInfof(ctx, "HttpProxyListener.handleConn req.URL %s newUrl %s", req.URL, newUrl)
+
+			req.URL = newUrl
+
+			if err := req.Write(proxyConn); err != nil {
+				return err
+			}
+
+			resp, err := http.ReadResponse(proxyReader, req)
+			if err != nil {
+				return err
+			}
+
+			if err := resp.Write(bufConn); err != nil {
+				return err
+			}
+
+			bufConn.Flush()
+
+			return nil
+		}()
+
+		proxyConn.Close()
+
+		if err != nil {
+			log.CtxWarnf(ctx, "HttpProxyListener.handleConn failed err %s", err)
+			break
+		}
 	}
 
-	proxyAddr := req.Host
-
-	if _, ok := h.allowHostMap[proxyAddr]; !ok {
-		return errors.New(fmt.Sprintf("proxyAddr %s not allow", proxyAddr))
-	}
-
-	if req.Method != http.MethodConnect {
-		return errors.New("")
-	}
-
-	resp := http.Response{
-		Status:       http.StatusText(http.StatusOK),
-		StatusCode:   http.StatusOK,
-		Proto:        "HTTP/1.1",
-		ProtoMajor:   1,
-		ProtoMinor:   1,
-		Header:       make(http.Header),
-		Uncompressed: false,
-		Trailer:      http.Header{},
-		Request:      req,
-	}
-
-	if err := resp.Write(bufConn); err != nil {
-		return err
-	}
-
-	if err := bufConn.Flush(); err != nil {
-		return err
-	}
-
-	if err := h.client.connect(ctx, bufConn, proxyAddr); err != nil {
-		return err
-	}
-
+	bufConn.Close()
 	return nil
 }
 

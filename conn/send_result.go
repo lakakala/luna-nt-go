@@ -2,8 +2,11 @@ package conn
 
 import (
 	"context"
+	"encoding/json"
+	"time"
 
 	"github.com/lakakala/luna-nt-go/message"
+	"github.com/lakakala/luna-nt-go/utils/log"
 )
 
 type SendResult struct {
@@ -35,35 +38,55 @@ func MakeSendMessage(frame *message.Frame) (*SendMessage, chan *SendResult) {
 	}, respChan
 }
 
+type RecvMessage struct {
+	frame *message.Frame
+	err   error
+}
+
+func makeRecvMessage(frame *message.Frame) *RecvMessage {
+	return &RecvMessage{
+		frame: frame,
+		err:   nil,
+	}
+}
+
+func makeErrorRecvMessage(err error) *RecvMessage {
+	return &RecvMessage{
+		frame: nil,
+		err:   err,
+	}
+}
+
+func (recvMsg *RecvMessage) Frame() (*message.Frame, error) {
+	return recvMsg.frame, recvMsg.err
+}
+
 type RecvMessageContext struct {
 	frame    *message.Frame
 	respChan chan *SendMessage
-	err      error
 }
 
-func makeSuccessRecvMessage(frame *message.Frame, respChan chan *SendMessage) *RecvMessageContext {
+func makeRecvMessageContext(frame *message.Frame, respChan chan *SendMessage) *RecvMessageContext {
 	return &RecvMessageContext{
 		frame:    frame,
 		respChan: respChan,
 	}
 }
 
-func makeErrorRecvMessage(err error) *RecvMessageContext {
-	return &RecvMessageContext{
-		err: err,
-	}
-}
-
-func (recvCtx *RecvMessageContext) Frame() (*message.Frame, error) {
-	return recvCtx.frame, recvCtx.err
+func (recvCtx *RecvMessageContext) Frame() *message.Frame {
+	return recvCtx.frame
 }
 
 func (recvCtx *RecvMessageContext) SendResp(ctx context.Context, resp message.Message) error {
 
-	reqFrame, err := recvCtx.Frame()
+	reqJson, err := json.Marshal(recvCtx.frame.Msg().Msg())
 	if err != nil {
 		return err
 	}
+
+	log.CtxInfof(ctx, "RecvMessageContext.SendResp req %s msgID %d costs %dms", string(reqJson), recvCtx.frame.MsgID(), time.Since(recvCtx.frame.CreateTime()).Milliseconds())
+	reqFrame := recvCtx.Frame()
+
 	frame, err := message.MakeFrame(ctx, reqFrame.MsgID(), resp)
 	if err != nil {
 		return err

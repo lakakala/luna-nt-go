@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"io"
 	"net"
+	"sync"
 
 	"github.com/lakakala/luna-nt-go/utils/log"
 )
@@ -60,9 +62,41 @@ func (cl *TcpClientListener) Close(ctx context.Context) {
 
 func (cl *TcpClientListener) handleConn(ctx context.Context, conn net.Conn) {
 
-	bufConn := NewBuferConn(conn)
-	if err := cl.client.connect(ctx, bufConn, cl.localAddr); err != nil {
-		log.CtxErrorf(ctx, "cl.client.Connect err: %v", err)
-		return
+	if err := cl.doHandleConn(ctx, conn); err != nil {
+		log.CtxErrorf(ctx, "doHandleConn failed err %s", err)
 	}
+
+}
+func (cl *TcpClientListener) doHandleConn(ctx context.Context, conn net.Conn) error {
+
+	channel, err := cl.client.connect(ctx, cl.localAddr)
+	if err != nil {
+		return err
+	}
+
+	waitGroup := sync.WaitGroup{}
+	waitGroup.Add(2)
+
+	go func() {
+
+		_, err = io.Copy(channel, conn)
+		if err != nil {
+			log.CtxErrorf(ctx, "io.Copy channel %d -> conn %s failed err %s", channel.ChannelID(), conn.RemoteAddr().String(), err)
+		}
+		waitGroup.Done()
+	}()
+
+	go func() {
+		_, err = io.Copy(conn, channel)
+		if err != nil {
+			log.CtxErrorf(ctx, "io.Copy conn %s -> channel %d failed err %s", conn.RemoteAddr().String(), channel.ChannelID(), err)
+		}
+		waitGroup.Done()
+	}()
+
+	waitGroup.Wait()
+
+	conn.Close()
+	channel.Close()
+	return nil
 }

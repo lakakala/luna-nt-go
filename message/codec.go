@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"io"
+	"time"
 
 	"github.com/lakakala/luna-nt-go/pb"
 	"google.golang.org/protobuf/proto"
@@ -12,9 +13,11 @@ import (
 type MessageType uint16
 
 const (
-	MessageTypeReq  MessageType = 1
-	MessageTypeResp MessageType = 2
-	MessageTypeNoti MessageType = 3
+	MessageTypeReq       MessageType = 1
+	MessageTypeResp      MessageType = 2
+	MessageTypeNoti      MessageType = 3
+	MessageTypeInnerReq  MessageType = 4
+	MessageTypeInnerNoti MessageType = 5
 )
 
 type decode = func(ctx context.Context, data []byte) (Message, error)
@@ -111,6 +114,63 @@ func init() {
 		return data, nil
 	}, MessageTypeResp)
 
+	registerCodec(COMMAND_CHANNEL_CREATE_REQ, func(ctx context.Context, data []byte) (Message, error) {
+		var req = &pb.ChannelCreateReq{}
+
+		if err := proto.Unmarshal(data, req); err != nil {
+			return nil, err
+		}
+
+		return NewPbMessage(COMMAND_CHANNEL_CREATE_REQ, req), nil
+	}, func(ctx context.Context, msg Message) ([]byte, error) {
+		req := msg.Msg().(*pb.ChannelCreateReq)
+
+		data, err := proto.Marshal(req)
+		if err != nil {
+			return nil, err
+		}
+
+		return data, nil
+	}, MessageTypeInnerReq)
+
+	registerCodec(COMMAND_CHANNEL_CLOSE_REQ, func(ctx context.Context, data []byte) (Message, error) {
+		var req = &pb.ChannelCloseReq{}
+
+		if err := proto.Unmarshal(data, req); err != nil {
+			return nil, err
+		}
+
+		return NewPbMessage(COMMAND_CHANNEL_CLOSE_REQ, req), nil
+	}, func(ctx context.Context, msg Message) ([]byte, error) {
+		req := msg.Msg().(*pb.ChannelCloseReq)
+
+		data, err := proto.Marshal(req)
+		if err != nil {
+			return nil, err
+		}
+
+		return data, nil
+	}, MessageTypeInnerReq)
+
+	registerCodec(COMMAND_CHANNEL_CLOSE_RESP, func(ctx context.Context, data []byte) (Message, error) {
+		var resp = &pb.ChannelCloseResp{}
+
+		if err := proto.Unmarshal(data, resp); err != nil {
+			return nil, err
+		}
+
+		return NewPbMessage(COMMAND_CHANNEL_CLOSE_RESP, resp), nil
+	}, func(ctx context.Context, msg Message) ([]byte, error) {
+		resp := msg.Msg().(*pb.ChannelCloseResp)
+
+		data, err := proto.Marshal(resp)
+		if err != nil {
+			return nil, err
+		}
+
+		return data, nil
+	}, MessageTypeResp)
+
 	registerCodec(COMMAND_DATA_NOTI, func(ctx context.Context, data []byte) (Message, error) {
 		var msg = &pb.DataNoti{}
 
@@ -128,45 +188,7 @@ func init() {
 		}
 
 		return data, nil
-	}, MessageTypeNoti)
-
-	registerCodec(COMMAND_CHANNEL_CLOSE_REQ, func(ctx context.Context, data []byte) (Message, error) {
-		var req = &pb.CloseChannelReq{}
-
-		if err := proto.Unmarshal(data, req); err != nil {
-			return nil, err
-		}
-
-		return NewPbMessage(COMMAND_CHANNEL_CLOSE_REQ, req), nil
-	}, func(ctx context.Context, msg Message) ([]byte, error) {
-		req := msg.Msg().(*pb.CloseChannelReq)
-
-		data, err := proto.Marshal(req)
-		if err != nil {
-			return nil, err
-		}
-
-		return data, nil
-	}, MessageTypeReq)
-
-	registerCodec(COMMAND_CHANNEL_CLOSE_RESP, func(ctx context.Context, data []byte) (Message, error) {
-		var resp = &pb.CloseChannelResp{}
-
-		if err := proto.Unmarshal(data, resp); err != nil {
-			return nil, err
-		}
-
-		return NewPbMessage(COMMAND_CHANNEL_CLOSE_RESP, resp), nil
-	}, func(ctx context.Context, msg Message) ([]byte, error) {
-		resp := msg.Msg().(*pb.CloseChannelResp)
-
-		data, err := proto.Marshal(resp)
-		if err != nil {
-			return nil, err
-		}
-
-		return data, nil
-	}, MessageTypeResp)
+	}, MessageTypeInnerNoti)
 
 	registerCodec(COMMAND_CHANNEL_WINDOW_UPDATE_NOTI, func(ctx context.Context, data []byte) (Message, error) {
 		var resp = &pb.ChannelWindowUpdateNoti{}
@@ -185,14 +207,15 @@ func init() {
 		}
 
 		return data, nil
-	}, MessageTypeNoti)
+	}, MessageTypeInnerNoti)
 
 }
 
 type Frame struct {
-	command CommandType
-	msgID   uint64
-	msg     Message
+	command    CommandType
+	msgID      uint64
+	msg        Message
+	createTime time.Time
 }
 
 func MakeFrame(ctx context.Context, msgID uint64, msg Message) (*Frame, error) {
@@ -200,9 +223,10 @@ func MakeFrame(ctx context.Context, msgID uint64, msg Message) (*Frame, error) {
 	cmd := msg.Cmd()
 
 	return &Frame{
-		command: cmd,
-		msgID:   msgID,
-		msg:     msg,
+		command:    cmd,
+		msgID:      msgID,
+		msg:        msg,
+		createTime: time.Now(),
 	}, nil
 }
 
@@ -218,8 +242,14 @@ func (f *Frame) Msg() Message {
 	return f.msg
 }
 
+func (f *Frame) CreateTime() time.Time {
+	return f.createTime
+}
+
 func Decode(ctx context.Context, reader io.Reader) (*Frame, error) {
-	var frame = &Frame{}
+	var frame = &Frame{
+		createTime: time.Now(),
+	}
 
 	if err := binary.Read(reader, binary.BigEndian, &frame.command); err != nil {
 		return nil, err
