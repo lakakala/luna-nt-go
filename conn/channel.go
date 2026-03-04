@@ -54,8 +54,6 @@ func (readBuf *ReadBuf) Read(b []byte) (int, error) {
 		return 0, err
 	}
 
-	log.Infof("ReadBuf.Read channelID %d len %d data %v", readBuf.channelID, n, b[:n])
-
 	return n, nil
 }
 
@@ -63,7 +61,6 @@ func (readBuf *ReadBuf) check() {
 	readBuf.mutex.Lock()
 	defer readBuf.mutex.Unlock()
 
-	log.CtxInfof(readBuf.ctx, "ReadBuf.check channelID %d send ack %d", readBuf.channelID, readBuf.r)
 	readBuf.conn.Send(readBuf.ctx, message.MakeChanelWindowUpdateNoti(readBuf.channelID, 0, uint64(readBuf.r)))
 }
 
@@ -109,7 +106,6 @@ func (readBuf *ReadBuf) doRead(b []byte) (int, error) {
 }
 
 func (readBuf *ReadBuf) put(ctx context.Context, code uint32, b []byte) error {
-	log.Infof("ReadBuf.put channelID %d code %d len %d data %v", readBuf.channelID, code, len(b), b)
 
 	if err := func() error {
 		readBuf.mutex.Lock()
@@ -131,7 +127,6 @@ func (readBuf *ReadBuf) put(ctx context.Context, code uint32, b []byte) error {
 }
 
 func (readBuf *ReadBuf) doPut(ctx context.Context, code uint32, b []byte) error {
-	log.CtxInfof(ctx, "ReadBuf.doPut channelID %d code %d len %d data %v", readBuf.channelID, code, len(b), b)
 	if code != 0 {
 
 		log.CtxInfof(readBuf.ctx, "ReadBuf.doPut channelID %d close", readBuf.channelID)
@@ -173,7 +168,6 @@ func (readBuf *ReadBuf) doPut(ctx context.Context, code uint32, b []byte) error 
 			return errors.New("ReadBuf.doPut n1+n2 != len(b)")
 		}
 
-		log.CtxInfof(readBuf.ctx, "ReadBuf.doPut channelID %d write %d data", readBuf.channelID, n1+n2)
 		readBuf.w += n2
 
 		return nil
@@ -206,6 +200,7 @@ func (readBuf *ReadBuf) Close() {
 		defer readBuf.mutex.Unlock()
 
 		readBuf.closed = true
+		readBuf.cond.Broadcast()
 	}()
 
 	readBuf.conn.Send(readBuf.ctx, message.MakeChanelWindowUpdateNoti(readBuf.channelID, 1, uint64(readBuf.r)))
@@ -242,8 +237,6 @@ func newWriteBuf(ctx context.Context, channelID uint64, conn *Conn, cap int) *Wr
 }
 
 func (writeBuf *WriteBuf) Write(b []byte) (int, error) {
-
-	log.Infof("WriteBuf.Write channelID %d len %d data %v", writeBuf.channelID, len(b), b)
 
 	totalWrite := 0
 	for len(b) > 0 {
@@ -303,7 +296,6 @@ func (writeBuf *WriteBuf) ack(ctx context.Context, code uint32, readIndex int64)
 	writeBuf.mutex.Lock()
 	defer writeBuf.mutex.Unlock()
 
-	log.CtxInfof(ctx, "WriteBuf.Ack channelID %d localR %d  remoteR %d", writeBuf.channelID, writeBuf.r, readIndex)
 	writeBuf.r = int(readIndex)
 
 	if code != 0 {
@@ -323,6 +315,7 @@ func (writeBuf *WriteBuf) Close() error {
 		defer writeBuf.mutex.Unlock()
 
 		writeBuf.closed = true
+		writeBuf.cond.Broadcast()
 	}()
 
 	_, err := writeBuf.conn.Send(writeBuf.ctx, message.MakeDataNoti(writeBuf.channelID, 1, nil))

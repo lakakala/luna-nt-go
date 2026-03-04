@@ -78,7 +78,11 @@ func (c *Client) GetStatus() ClientStatus {
 	return c.status
 }
 
-func (c *Client) start(ctx context.Context) error {
+func (c *Client) start(ctx context.Context) {
+	c.acceptLoop(ctx)
+}
+
+func (c *Client) acceptLoop(ctx context.Context) error {
 	for {
 		recvCtx, err := c.conn.Accept(ctx)
 		if err != nil {
@@ -86,10 +90,6 @@ func (c *Client) start(ctx context.Context) error {
 		}
 
 		frame := recvCtx.Frame()
-		if err != nil {
-			return err
-		}
-
 		switch frame.Command() {
 		case message.COMMAND_AUTH_REQ:
 			c.handleAuthReq(ctx, recvCtx)

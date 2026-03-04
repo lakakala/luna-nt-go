@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/lakakala/luna-nt-go/server"
 	"github.com/spf13/cobra"
@@ -40,5 +43,19 @@ func runServer(configPath string) error {
 		return err
 	}
 
-	return server.RunServer(config)
+	go func() {
+		if err := server.RunServer(config); err != nil {
+			fmt.Printf("start server failed err %s", err)
+			panic(err)
+		}
+	}()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	sig := <-sigChan
+	fmt.Printf("\n接收到信号: %v，开始优雅退出...\n", sig)
+	server.CloseServer()
+
+	return nil
 }

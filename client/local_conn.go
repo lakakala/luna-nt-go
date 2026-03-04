@@ -2,83 +2,60 @@ package client
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lakakala/luna-nt-go/conn"
 	"github.com/lakakala/luna-nt-go/utils/log"
 )
 
-type ChannelManager struct {
+type ConnManager struct {
 	mutex        sync.Mutex
+	nextConnID   *atomic.Uint64
 	localConnMap map[uint64]*LocalConn
 }
 
-func newChannelManager() *ChannelManager {
-	return &ChannelManager{
+func newConnManager() *ConnManager {
+	return &ConnManager{
 		mutex:        sync.Mutex{},
+		nextConnID:   &atomic.Uint64{},
 		localConnMap: make(map[uint64]*LocalConn),
 	}
 }
 
-func (cm *ChannelManager) GetChannel(channelID uint64) (*LocalConn, error) {
+func (cm *ConnManager) NewConn(ctx context.Context, channel *conn.Channel, localAddr string) (*LocalConn, error) {
+
+	localConnID := cm.nextConnID.Add(1)
+	lc, err := NewLocalConn(ctx, channel, localAddr)
+	if err != nil {
+		return nil, err
+	}
+
 	cm.mutex.Lock()
 	defer cm.mutex.Unlock()
 
-	lc, ok := cm.localConnMap[channelID]
-	if !ok {
-		return nil, errors.New("channel not found")
-	}
+	log.CtxInfof(ctx, "NewConn connID %d create success", localConnID)
+	cm.localConnMap[localConnID] = lc
 
 	return lc, nil
 }
 
-func (cm *ChannelManager) AddChannel(ctx context.Context, lc *LocalConn) error {
+func (cm *ConnManager) CloseAll(ctx context.Context) {
 	cm.mutex.Lock()
 	defer cm.mutex.Unlock()
 
-	_, ok := cm.localConnMap[lc.GetChannelID()]
-	if ok {
-		return errors.New("channel already exist")
+	for connID, lc := range cm.localConnMap {
+		lc.Close(ctx)
+		delete(cm.localConnMap, connID)
 	}
-
-	log.CtxInfof(ctx, "ChannelManager AddChannel channelID %d", lc.GetChannelID())
-
-	cm.localConnMap[lc.GetChannelID()] = lc
-
-	return nil
-}
-
-func (cm *ChannelManager) RemoveChannel(ctx context.Context, channelID uint64) error {
-	cm.mutex.Lock()
-	defer cm.mutex.Unlock()
-
-	_, ok := cm.localConnMap[channelID]
-	if !ok {
-		return errors.New("channel not found")
-	}
-
-	log.CtxInfof(ctx, "ChannelManager RemoveChannel channelID %d", channelID)
-
-	delete(cm.localConnMap, channelID)
-
-	return nil
-}
-
-func (cm *ChannelManager) CloseAll(ctx context.Context) {
-
-	for _, lc := range cm.localConnMap {
-		lc.close(ctx, "ChannelManager CloseAll")
-	}
-
-	log.CtxInfof(ctx, "ChannelManager CloseAll success")
 }
 
 type LocalConn struct {
 	localAddr string
+	localConn net.Conn
 	channel   *conn.Channel
 }
 
@@ -107,6 +84,8 @@ func (lc *LocalConn) doStart(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	lc.localConn = connection
 
 	tcpConn := connection.(*net.TCPConn)
 
@@ -142,6 +121,7 @@ func (lc *LocalConn) doStart(ctx context.Context) error {
 	return nil
 }
 
-func (lc *LocalConn) close(ctx context.Context, msg string) {
-
+func (lc *LocalConn) Close(ctx context.Context) {
+	lc.channel.Close()
+	lc.localConn.Close()
 }

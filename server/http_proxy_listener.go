@@ -3,7 +3,8 @@ package server
 import (
 	"bufio"
 	"context"
-	"io"
+	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"sync"
@@ -87,12 +88,10 @@ func (h *HttpProxyListener) doHandleConn(ctx context.Context, conn net.Conn) err
 		proxyAddr := req.Host
 
 		if _, ok := h.allowHostMap[proxyAddr]; !ok {
-			// return errors.New(fmt.Sprintf("proxyAddr %s not allow", proxyAddr))
+			return errors.New(fmt.Sprintf("proxyAddr %s not allow", proxyAddr))
 		}
 
 		if req.Method == http.MethodConnect {
-			// return errors.New(fmt.Sprintf("proxyAddr %s not support CONNECT method", proxyAddr))
-
 			if err := func() error {
 				resp := http.Response{
 					Status:       http.StatusText(http.StatusOK),
@@ -122,18 +121,40 @@ func (h *HttpProxyListener) doHandleConn(ctx context.Context, conn net.Conn) err
 				waitGroup := sync.WaitGroup{}
 				waitGroup.Add(2)
 				go func() {
-					_, err := io.Copy(channel, bufConn)
-					if err != nil {
-						log.CtxWarnf(ctx, "HttpProxyListener.handleConn io.Copy failed err %s", err)
+					buf := make([]byte, 10)
+					for {
+						readN, readErr := channel.Read(buf)
+
+						_, writeErr := bufConn.Write(buf[:readN])
+
+						bufConn.Flush()
+						if readErr != nil {
+							break
+						}
+
+						if writeErr != nil {
+							break
+						}
 					}
 
 					waitGroup.Done()
 				}()
 
 				go func() {
-					_, err := io.Copy(bufConn, channel)
-					if err != nil {
-						log.CtxWarnf(ctx, "HttpProxyListener.handleConn io.Copy failed err %s", err)
+					buf := make([]byte, 1024)
+
+					for {
+						readN, readErr := bufConn.Read(buf)
+
+						_, writeErr := channel.Write(buf[:readN])
+
+						if readErr != nil {
+							break
+						}
+
+						if writeErr != nil {
+							break
+						}
 					}
 
 					waitGroup.Done()

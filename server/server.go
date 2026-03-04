@@ -7,9 +7,18 @@ import (
 	"github.com/lakakala/luna-nt-go/utils/log"
 )
 
+var ser *Server
+
 func RunServer(conf *Config) error {
-	ser := newServer(conf)
+	ser = newServer(conf)
 	return ser.start(context.Background())
+}
+
+func CloseServer() {
+	if ser != nil {
+		ser.close()
+		ser = nil
+	}
 }
 
 type Server struct {
@@ -42,6 +51,10 @@ func (ser *Server) start(ctx context.Context) error {
 	}
 }
 
+func (ser *Server) close() {
+
+}
+
 func (ser *Server) handleConn(ctx context.Context, rawConn net.Conn) {
 	cli, err := newClient(ctx, ser.conf, ser.clientManager, rawConn)
 	if err != nil {
@@ -49,8 +62,5 @@ func (ser *Server) handleConn(ctx context.Context, rawConn net.Conn) {
 		return
 	}
 
-	if err := cli.start(ctx); err != nil {
-		log.CtxErrorf(ctx, "cli.start err: %v", err)
-		return
-	}
+	cli.start(ctx)
 }

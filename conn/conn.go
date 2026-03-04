@@ -14,8 +14,18 @@ import (
 	"github.com/lakakala/luna-nt-go/utils/log"
 )
 
+type ConnStatusType int
+
+const (
+	ConnStatusConnected ConnStatusType = 1
+	ConnStatusClosing   ConnStatusType = 2
+	ConnStatusClosed    ConnStatusType = 3
+)
+
 type Conn struct {
 	mutex sync.Mutex
+
+	status ConnStatusType
 
 	nextMsgID *atomic.Uint64
 	conn      net.Conn
@@ -36,6 +46,7 @@ func NewConnFromRawConn(ctx context.Context, rawConn net.Conn) (*Conn, error) {
 	channelManager := newChannelManager()
 
 	conn := &Conn{
+		status:    ConnStatusClosed,
 		nextMsgID: nextMsgID,
 		conn:      rawConn,
 
@@ -49,7 +60,6 @@ func NewConnFromRawConn(ctx context.Context, rawConn net.Conn) (*Conn, error) {
 	}
 
 	conn.start(ctx)
-
 	return conn, nil
 }
 
@@ -62,10 +72,26 @@ func NewConn(ctx context.Context, addr string) (*Conn, error) {
 	return NewConnFromRawConn(ctx, rawConn)
 }
 
-func (conn *Conn) start(ctx context.Context) {
+func (conn *Conn) start(ctx context.Context) error {
+	if err := func() error {
+		conn.mutex.Lock()
+		defer conn.mutex.Unlock()
+
+		if conn.status != ConnStatusClosed {
+			return errors.New("Conn.start status is not ConnStatusClosed")
+		}
+
+		conn.status = ConnStatusConnected
+		return nil
+	}(); err != nil {
+		return err
+	}
+
 	go conn.accptInner(ctx)
 	go conn.readLoop(ctx)
 	go conn.writeLoop(ctx)
+
+	return nil
 }
 
 func (conn *Conn) readLoop(ctx context.Context) {
@@ -105,7 +131,6 @@ readLoop:
 		}
 	}
 
-	close(conn.readChan)
 	log.CtxInfof(ctx, "Conn readLoop end")
 }
 
@@ -136,6 +161,7 @@ func (conn *Conn) handleRespMessage(ctx context.Context, sendResult *SendResult)
 func (conn *Conn) writeLoop(ctx context.Context) {
 writeLoop:
 	for sendMsg := range conn.writeChan {
+
 		msgID := sendMsg.frame.MsgID()
 
 		msgType := message.MsgType(sendMsg.frame.Command())
@@ -171,8 +197,9 @@ func (conn *Conn) accptInner(ctx context.Context) {
 		case message.COMMAND_CHANNEL_WINDOW_UPDATE_NOTI:
 			conn.handleChannelWindowUpdateNoti(ctx, recvMsgCtx)
 		}
-
 	}
+
+	log.CtxInfof(ctx, "Conn accptInner end")
 }
 
 func (conn *Conn) handleChannelCreateReq(ctx context.Context, recvCtx *RecvMessageContext) {
@@ -180,6 +207,18 @@ func (conn *Conn) handleChannelCreateReq(ctx context.Context, recvCtx *RecvMessa
 
 	channelID := channelCreateReq.GetChannelId()
 	windowSize := channelCreateReq.GetWindowSize()
+
+	status := func() ConnStatusType {
+		conn.mutex.Lock()
+		defer conn.mutex.Unlock()
+
+		return conn.status
+	}()
+
+	if status != ConnStatusConnected {
+		recvCtx.SendResp(ctx, message.MakeConnectResp(1, fmt.Sprintf("conn status %d not connected", conn.status)))
+		return
+	}
 
 	channel := newChannel(ctx, channelID, conn, windowSize)
 	if _, ok := conn.channelManager.AddChannel(ctx, channel); !ok {
@@ -295,7 +334,7 @@ func (conn *Conn) GetChannel(ctx context.Context, channelID uint64) *Channel {
 
 func (conn *Conn) CreateChannel(ctx context.Context) (*Channel, error) {
 
-	var windowSize uint64 = 80
+	var windowSize uint64 = 2048
 
 	channelID := conn.channelManager.NextChannelID()
 
@@ -322,13 +361,28 @@ func (conn *Conn) CreateChannel(ctx context.Context) (*Channel, error) {
 }
 
 func (conn *Conn) Close(ctx context.Context) {
+
+	func() {
+		conn.mutex.Lock()
+		defer conn.mutex.Unlock()
+
+		conn.status = ConnStatusClosing
+	}()
+
 	conn.closeSendMsgMap(ctx)
 
 	conn.conn.Close()
 
 	close(conn.readChan)
 	close(conn.writeChan)
+	close(conn.innerReadChan)
 
+	func() {
+		conn.mutex.Lock()
+		defer conn.mutex.Unlock()
+
+		conn.status = ConnStatusClosed
+	}()
 	log.CtxInfof(ctx, "Conn close done")
 }
 

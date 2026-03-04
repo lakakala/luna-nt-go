@@ -13,15 +13,19 @@ import (
 	"github.com/lakakala/luna-nt-go/utils/log"
 )
 
-func StartClient(conf *Config) error {
-	cli, err := newClient(context.Background(), conf)
-	if err != nil {
-		return err
+var cli *Client
+
+func StartClient(conf *Config) {
+	cli = newClient(context.Background(), conf)
+
+	go cli.start(context.Background())
+}
+
+func StopClient() {
+	if cli != nil {
+		cli.Close(context.Background())
+		cli = nil
 	}
-
-	cli.start(context.Background())
-
-	return nil
 }
 
 type ClientStatus int16
@@ -36,25 +40,25 @@ const (
 type Client struct {
 	mutex sync.Mutex
 
-	channelManager *ChannelManager
+	connManager *ConnManager
 
 	status ClientStatus
 	conf   *Config
 	conn   *conn.Conn
 }
 
-func newClient(ctx context.Context, conf *Config) (*Client, error) {
+func newClient(ctx context.Context, conf *Config) *Client {
 
 	cli := &Client{
-		mutex: sync.Mutex{},
-
-		channelManager: newChannelManager(),
-
+		mutex:  sync.Mutex{},
 		status: ClientStatusUninit,
-		conf:   conf,
+
+		connManager: newConnManager(),
+
+		conf: conf,
 	}
 
-	return cli, nil
+	return cli
 }
 
 func (cli *Client) GetStatus() ClientStatus {
@@ -160,13 +164,13 @@ func (cli *Client) handleConnect(ctx context.Context, recvCtx *conn.RecvMessageC
 		return
 	}
 
-	localConn, err := NewLocalConn(ctx, channel, localAddr)
+	conn, err := cli.connManager.NewConn(ctx, channel, localAddr)
 	if err != nil {
 		recvCtx.SendResp(ctx, message.MakeConnectResp(-1, err.Error()))
 		return
 	}
 
-	go localConn.start(ctx)
+	go conn.start(ctx)
 
 	recvCtx.SendResp(ctx, message.MakeConnectResp(0, "success"))
 
@@ -177,7 +181,7 @@ func (cli *Client) Close(ctx context.Context) {
 
 	cli.setStatus(ClientStatusCloseing)
 
-	cli.channelManager.CloseAll(ctx)
+	cli.connManager.CloseAll(ctx)
 
 	if cli.conn != nil {
 		cli.conn.Close(ctx)
