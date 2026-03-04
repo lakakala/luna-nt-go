@@ -43,14 +43,10 @@ func runClient(configPath string) error {
 		return err
 	}
 
-	client.StartClient(config)
-
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	sig := <-sigChan
-	fmt.Printf("\n接收到信号: %v，开始优雅退出...\n", sig)
-	client.StopClient()
+	client.StartClient(config, sigChan)
 
 	return nil
 }

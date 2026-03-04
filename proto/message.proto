@@ -43,13 +43,9 @@ message ChannelCreateResp {
   optional BaseResp base_resp = 1;
 }
 
-message ChannelCloseReq {
+message ChannelCloseNoti {
   optional uint64 channel_id = 1;
   optional string msg = 2;
-}
-
-message ChannelCloseResp {
-  optional BaseResp base_resp = 1;
 }
 
 message DataNoti {

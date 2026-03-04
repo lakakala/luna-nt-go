@@ -2,23 +2,39 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net"
+	"os"
 
 	"github.com/lakakala/luna-nt-go/utils/log"
 )
 
-var ser *Server
+func RunServer(conf *Config, cancelChan chan os.Signal) {
 
-func RunServer(conf *Config) error {
-	ser = newServer(conf)
-	return ser.start(context.Background())
-}
+	ctx := context.Background()
+	ser := newServer(conf)
 
-func CloseServer() {
-	if ser != nil {
-		ser.close()
-		ser = nil
+	existChan := make(chan error, 1)
+	go func() {
+		err := ser.start(ctx)
+
+		existChan <- err
+	}()
+
+	select {
+	case signal := <-cancelChan:
+		fmt.Printf("Server cancel signal: %v\n", signal)
+	case err := <-existChan:
+		if err != nil {
+			fmt.Printf("Server exist err: %v\n", err)
+		} else {
+			fmt.Printf("Server exist\n")
+		}
 	}
+
+	ser.close(ctx)
+
+	fmt.Printf("Server close success\n")
 }
 
 type Server struct {
@@ -51,8 +67,7 @@ func (ser *Server) start(ctx context.Context) error {
 	}
 }
 
-func (ser *Server) close() {
-
+func (ser *Server) close(ctx context.Context) {
 }
 
 func (ser *Server) handleConn(ctx context.Context, rawConn net.Conn) {

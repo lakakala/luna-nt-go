@@ -14,8 +14,7 @@ const (
 
 	COMMAND_CHANNEL_CREATE_REQ         CommandType = 21
 	COMMAND_CHANNEL_CREATE_RESP        CommandType = 22
-	COMMAND_CHANNEL_CLOSE_REQ          CommandType = 23
-	COMMAND_CHANNEL_CLOSE_RESP         CommandType = 24
+	COMMAND_CHANNEL_CLOSE_NOTI         CommandType = 23
 	COMMAND_DATA_NOTI                  CommandType = 25
 	COMMAND_CHANNEL_WINDOW_UPDATE_NOTI CommandType = 26
 )

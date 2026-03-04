@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -13,19 +14,33 @@ import (
 	"github.com/lakakala/luna-nt-go/utils/log"
 )
 
-var cli *Client
+func StartClient(conf *Config, cancelChan chan os.Signal) {
 
-func StartClient(conf *Config) {
-	cli = newClient(context.Background(), conf)
+	ctx := context.Background()
+	existChan := make(chan error, 1)
 
-	go cli.start(context.Background())
-}
+	cli := newClient(ctx, conf)
 
-func StopClient() {
-	if cli != nil {
-		cli.Close(context.Background())
-		cli = nil
+	go func() {
+		err := cli.start(ctx)
+
+		existChan <- err
+	}()
+
+	select {
+	case signal := <-cancelChan:
+		fmt.Printf("Client cancel signal: %v\n", signal)
+	case err := <-existChan:
+		if err != nil {
+			fmt.Printf("Client exist err: %v\n", err)
+		} else {
+			fmt.Printf("Client exist\n")
+		}
 	}
+
+	cli.Close(ctx)
+
+	fmt.Printf("Client close success\n")
 }
 
 type ClientStatus int16
@@ -38,19 +53,21 @@ const (
 )
 
 type Client struct {
-	mutex sync.Mutex
+	mutex  sync.Mutex
+	close  bool
+	status ClientStatus
 
 	connManager *ConnManager
 
-	status ClientStatus
-	conf   *Config
-	conn   *conn.Conn
+	conf *Config
+	conn *conn.Conn
 }
 
 func newClient(ctx context.Context, conf *Config) *Client {
 
 	cli := &Client{
 		mutex:  sync.Mutex{},
+		close:  false,
 		status: ClientStatusUninit,
 
 		connManager: newConnManager(),
@@ -75,16 +92,30 @@ func (cli *Client) setStatus(status ClientStatus) {
 	cli.status = status
 }
 
-func (cli *Client) start(ctx context.Context) {
+func (cli *Client) start(ctx context.Context) error {
 
 	for {
 		if err := cli.doStart(ctx); err != nil {
 			log.CtxWarnf(ctx, "Client %d start failed err %s", cli.conf.ClientID, err)
 		}
 
-		cli.Close(ctx)
-		time.Sleep(time.Second * 5)
+		cli.cleanup(ctx)
+
+		isClose := func() bool {
+			cli.mutex.Lock()
+			defer cli.mutex.Unlock()
+
+			return cli.close
+		}()
+
+		if isClose {
+			break
+		} else {
+			time.Sleep(time.Second * 5)
+		}
 	}
+
+	return nil
 }
 
 func (cli *Client) doStart(ctx context.Context) error {
@@ -177,8 +208,8 @@ func (cli *Client) handleConnect(ctx context.Context, recvCtx *conn.RecvMessageC
 	log.CtxInfof(ctx, "Client %d handleConnect channelID %d localAddr %s success", cli.conf.ClientID, channelID, localAddr)
 }
 
-func (cli *Client) Close(ctx context.Context) {
-
+func (cli *Client) cleanup(ctx context.Context) {
+	log.CtxInfof(ctx, "Client %d begin cleanup", cli.conf.ClientID)
 	cli.setStatus(ClientStatusCloseing)
 
 	cli.connManager.CloseAll(ctx)
@@ -189,6 +220,24 @@ func (cli *Client) Close(ctx context.Context) {
 	}
 
 	cli.setStatus(ClientStatusClosed)
+
+	log.CtxInfof(ctx, "Client %d cleanup success", cli.conf.ClientID)
+}
+
+func (cli *Client) Close(ctx context.Context) {
+
+	func() {
+		cli.mutex.Lock()
+		defer cli.mutex.Unlock()
+
+		if cli.close {
+			return
+		}
+
+		cli.close = true
+	}()
+
+	cli.cleanup(ctx)
 
 	log.CtxInfof(ctx, "Client %d Close success", cli.conf.ClientID)
 }

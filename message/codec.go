@@ -133,16 +133,16 @@ func init() {
 		return data, nil
 	}, MessageTypeInnerReq)
 
-	registerCodec(COMMAND_CHANNEL_CLOSE_REQ, func(ctx context.Context, data []byte) (Message, error) {
-		var req = &pb.ChannelCloseReq{}
+	registerCodec(COMMAND_CHANNEL_CLOSE_NOTI, func(ctx context.Context, data []byte) (Message, error) {
+		var req = &pb.ChannelCloseNoti{}
 
 		if err := proto.Unmarshal(data, req); err != nil {
 			return nil, err
 		}
 
-		return NewPbMessage(COMMAND_CHANNEL_CLOSE_REQ, req), nil
+		return NewPbMessage(COMMAND_CHANNEL_CLOSE_NOTI, req), nil
 	}, func(ctx context.Context, msg Message) ([]byte, error) {
-		req := msg.Msg().(*pb.ChannelCloseReq)
+		req := msg.Msg().(*pb.ChannelCloseNoti)
 
 		data, err := proto.Marshal(req)
 		if err != nil {
@@ -150,26 +150,7 @@ func init() {
 		}
 
 		return data, nil
-	}, MessageTypeInnerReq)
-
-	registerCodec(COMMAND_CHANNEL_CLOSE_RESP, func(ctx context.Context, data []byte) (Message, error) {
-		var resp = &pb.ChannelCloseResp{}
-
-		if err := proto.Unmarshal(data, resp); err != nil {
-			return nil, err
-		}
-
-		return NewPbMessage(COMMAND_CHANNEL_CLOSE_RESP, resp), nil
-	}, func(ctx context.Context, msg Message) ([]byte, error) {
-		resp := msg.Msg().(*pb.ChannelCloseResp)
-
-		data, err := proto.Marshal(resp)
-		if err != nil {
-			return nil, err
-		}
-
-		return data, nil
-	}, MessageTypeResp)
+	}, MessageTypeInnerNoti)
 
 	registerCodec(COMMAND_DATA_NOTI, func(ctx context.Context, data []byte) (Message, error) {
 		var msg = &pb.DataNoti{}

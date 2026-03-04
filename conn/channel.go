@@ -388,7 +388,7 @@ func (channel *Channel) CloseWrite() error {
 	return nil
 }
 
-func (channel *Channel) Close() error {
+func (channel *Channel) Close(ctx context.Context) error {
 	if err := channel.CloseRead(); err != nil {
 		return err
 	}
@@ -396,6 +396,8 @@ func (channel *Channel) Close() error {
 	if err := channel.CloseWrite(); err != nil {
 		return err
 	}
+
+	channel.conn.channelManager.RemoveChannel(ctx, channel.channelID)
 
 	return nil
 }

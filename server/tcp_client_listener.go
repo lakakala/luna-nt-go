@@ -132,6 +132,6 @@ func (cl *TcpClientListener) doHandleConn(ctx context.Context, conn *net.TCPConn
 	waitGroup.Wait()
 
 	conn.Close()
-	channel.Close()
+	channel.Close(ctx)
 	return nil
 }

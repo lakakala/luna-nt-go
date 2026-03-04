@@ -52,21 +52,11 @@ func MakeChannelCreateResp(code int32, msg string) Message {
 	return NewPbMessage(COMMAND_CHANNEL_CREATE_RESP, &channelCreateResp)
 }
 
-func MakeChannelCloseReq(channelID uint64, msg string) Message {
-	channelCloseReq := pb.ChannelCloseReq{}
-	channelCloseReq.ChannelId = &channelID
-	channelCloseReq.Msg = &msg
-	return NewPbMessage(COMMAND_CHANNEL_CLOSE_REQ, &channelCloseReq)
-}
-
-func MakeChannelCloseResp(code int32, msg string) Message {
-	channelCloseResp := pb.ChannelCloseResp{}
-	channelCloseResp.BaseResp = &pb.BaseResp{
-		Code: &code,
-		Msg:  &msg,
-	}
-
-	return NewPbMessage(COMMAND_CHANNEL_CLOSE_RESP, &channelCloseResp)
+func MakeChannelCloseNoti(channelID uint64, msg string) Message {
+	channelCloseNoti := pb.ChannelCloseNoti{}
+	channelCloseNoti.ChannelId = &channelID
+	channelCloseNoti.Msg = &msg
+	return NewPbMessage(COMMAND_CHANNEL_CLOSE_NOTI, &channelCloseNoti)
 }
 
 func MakeDataNoti(channelID uint64, code uint32, data []byte) Message {

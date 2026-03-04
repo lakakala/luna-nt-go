@@ -162,7 +162,7 @@ func (h *HttpProxyListener) doHandleConn(ctx context.Context, conn net.Conn) err
 				// break
 				waitGroup.Wait()
 
-				channel.Close()
+				channel.Close(ctx)
 				return nil
 			}(); err != nil {
 				log.CtxWarnf(ctx, "HttpProxyListener.handleConn failed err %s", err)
@@ -211,7 +211,7 @@ func (h *HttpProxyListener) doHandleConn(ctx context.Context, conn net.Conn) err
 			return nil
 		}()
 
-		proxyConn.Close()
+		proxyConn.Close(ctx)
 
 		if err != nil {
 			log.CtxWarnf(ctx, "HttpProxyListener.handleConn failed err %s", err)

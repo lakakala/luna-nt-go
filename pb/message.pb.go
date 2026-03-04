@@ -449,7 +449,7 @@ func (x *ChannelCreateResp) GetBaseResp() *BaseResp {
 	return nil
 }
 
-type ChannelCloseReq struct {
+type ChannelCloseNoti struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ChannelId     *uint64                `protobuf:"varint,1,opt,name=channel_id,json=channelId,proto3,oneof" json:"channel_id,omitempty"`
 	Msg           *string                `protobuf:"bytes,2,opt,name=msg,proto3,oneof" json:"msg,omitempty"`
@@ -457,20 +457,20 @@ type ChannelCloseReq struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ChannelCloseReq) Reset() {
-	*x = ChannelCloseReq{}
+func (x *ChannelCloseNoti) Reset() {
+	*x = ChannelCloseNoti{}
 	mi := &file_message_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ChannelCloseReq) String() string {
+func (x *ChannelCloseNoti) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ChannelCloseReq) ProtoMessage() {}
+func (*ChannelCloseNoti) ProtoMessage() {}
 
-func (x *ChannelCloseReq) ProtoReflect() protoreflect.Message {
+func (x *ChannelCloseNoti) ProtoReflect() protoreflect.Message {
 	mi := &file_message_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -482,67 +482,23 @@ func (x *ChannelCloseReq) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ChannelCloseReq.ProtoReflect.Descriptor instead.
-func (*ChannelCloseReq) Descriptor() ([]byte, []int) {
+// Deprecated: Use ChannelCloseNoti.ProtoReflect.Descriptor instead.
+func (*ChannelCloseNoti) Descriptor() ([]byte, []int) {
 	return file_message_proto_rawDescGZIP(), []int{9}
 }
 
-func (x *ChannelCloseReq) GetChannelId() uint64 {
+func (x *ChannelCloseNoti) GetChannelId() uint64 {
 	if x != nil && x.ChannelId != nil {
 		return *x.ChannelId
 	}
 	return 0
 }
 
-func (x *ChannelCloseReq) GetMsg() string {
+func (x *ChannelCloseNoti) GetMsg() string {
 	if x != nil && x.Msg != nil {
 		return *x.Msg
 	}
 	return ""
-}
-
-type ChannelCloseResp struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	BaseResp      *BaseResp              `protobuf:"bytes,1,opt,name=base_resp,json=baseResp,proto3,oneof" json:"base_resp,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ChannelCloseResp) Reset() {
-	*x = ChannelCloseResp{}
-	mi := &file_message_proto_msgTypes[10]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ChannelCloseResp) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ChannelCloseResp) ProtoMessage() {}
-
-func (x *ChannelCloseResp) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[10]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ChannelCloseResp.ProtoReflect.Descriptor instead.
-func (*ChannelCloseResp) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *ChannelCloseResp) GetBaseResp() *BaseResp {
-	if x != nil {
-		return x.BaseResp
-	}
-	return nil
 }
 
 type DataNoti struct {
@@ -556,7 +512,7 @@ type DataNoti struct {
 
 func (x *DataNoti) Reset() {
 	*x = DataNoti{}
-	mi := &file_message_proto_msgTypes[11]
+	mi := &file_message_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -568,7 +524,7 @@ func (x *DataNoti) String() string {
 func (*DataNoti) ProtoMessage() {}
 
 func (x *DataNoti) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[11]
+	mi := &file_message_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -581,7 +537,7 @@ func (x *DataNoti) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DataNoti.ProtoReflect.Descriptor instead.
 func (*DataNoti) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{11}
+	return file_message_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *DataNoti) GetChannelId() uint64 {
@@ -616,7 +572,7 @@ type ChannelWindowUpdateNoti struct {
 
 func (x *ChannelWindowUpdateNoti) Reset() {
 	*x = ChannelWindowUpdateNoti{}
-	mi := &file_message_proto_msgTypes[12]
+	mi := &file_message_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -628,7 +584,7 @@ func (x *ChannelWindowUpdateNoti) String() string {
 func (*ChannelWindowUpdateNoti) ProtoMessage() {}
 
 func (x *ChannelWindowUpdateNoti) ProtoReflect() protoreflect.Message {
-	mi := &file_message_proto_msgTypes[12]
+	mi := &file_message_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -641,7 +597,7 @@ func (x *ChannelWindowUpdateNoti) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChannelWindowUpdateNoti.ProtoReflect.Descriptor instead.
 func (*ChannelWindowUpdateNoti) Descriptor() ([]byte, []int) {
-	return file_message_proto_rawDescGZIP(), []int{12}
+	return file_message_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ChannelWindowUpdateNoti) GetChannelId() uint64 {
@@ -714,17 +670,13 @@ const file_message_proto_rawDesc = "" +
 	"\x11ChannelCreateResp\x12+\n" +
 	"\tbase_resp\x18\x01 \x01(\v2\t.BaseRespH\x00R\bbaseResp\x88\x01\x01B\f\n" +
 	"\n" +
-	"_base_resp\"c\n" +
-	"\x0fChannelCloseReq\x12\"\n" +
+	"_base_resp\"d\n" +
+	"\x10ChannelCloseNoti\x12\"\n" +
 	"\n" +
 	"channel_id\x18\x01 \x01(\x04H\x00R\tchannelId\x88\x01\x01\x12\x15\n" +
 	"\x03msg\x18\x02 \x01(\tH\x01R\x03msg\x88\x01\x01B\r\n" +
 	"\v_channel_idB\x06\n" +
-	"\x04_msg\"M\n" +
-	"\x10ChannelCloseResp\x12+\n" +
-	"\tbase_resp\x18\x01 \x01(\v2\t.BaseRespH\x00R\bbaseResp\x88\x01\x01B\f\n" +
-	"\n" +
-	"_base_resp\"\x81\x01\n" +
+	"\x04_msg\"\x81\x01\n" +
 	"\bDataNoti\x12\"\n" +
 	"\n" +
 	"channel_id\x18\x01 \x01(\x04H\x00R\tchannelId\x88\x01\x01\x12\x17\n" +
@@ -755,7 +707,7 @@ func file_message_proto_rawDescGZIP() []byte {
 	return file_message_proto_rawDescData
 }
 
-var file_message_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_message_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_message_proto_goTypes = []any{
 	(*BaseResp)(nil),                // 0: BaseResp
 	(*AuthReq)(nil),                 // 1: AuthReq
@@ -766,22 +718,20 @@ var file_message_proto_goTypes = []any{
 	(*ClientCloseResp)(nil),         // 6: ClientCloseResp
 	(*ChannelCreateReq)(nil),        // 7: ChannelCreateReq
 	(*ChannelCreateResp)(nil),       // 8: ChannelCreateResp
-	(*ChannelCloseReq)(nil),         // 9: ChannelCloseReq
-	(*ChannelCloseResp)(nil),        // 10: ChannelCloseResp
-	(*DataNoti)(nil),                // 11: DataNoti
-	(*ChannelWindowUpdateNoti)(nil), // 12: ChannelWindowUpdateNoti
+	(*ChannelCloseNoti)(nil),        // 9: ChannelCloseNoti
+	(*DataNoti)(nil),                // 10: DataNoti
+	(*ChannelWindowUpdateNoti)(nil), // 11: ChannelWindowUpdateNoti
 }
 var file_message_proto_depIdxs = []int32{
 	0, // 0: AuthResp.base_resp:type_name -> BaseResp
 	0, // 1: ConnectResp.base_resp:type_name -> BaseResp
 	0, // 2: ClientCloseResp.base_resp:type_name -> BaseResp
 	0, // 3: ChannelCreateResp.base_resp:type_name -> BaseResp
-	0, // 4: ChannelCloseResp.base_resp:type_name -> BaseResp
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_message_proto_init() }
@@ -800,14 +750,13 @@ func file_message_proto_init() {
 	file_message_proto_msgTypes[9].OneofWrappers = []any{}
 	file_message_proto_msgTypes[10].OneofWrappers = []any{}
 	file_message_proto_msgTypes[11].OneofWrappers = []any{}
-	file_message_proto_msgTypes[12].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_message_proto_rawDesc), len(file_message_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -44,10 +44,9 @@ func (channelManager *ChannelManager) GetChannel(ctx context.Context, channelID 
 	return channelManager.channelMap[channelID]
 }
 
-func (channelManager *ChannelManager) RemoveChannel(ctx context.Context, channel *Channel) {
+func (channelManager *ChannelManager) RemoveChannel(ctx context.Context, channelID uint64) {
 	channelManager.mutex.Lock()
 	defer channelManager.mutex.Unlock()
 
-	delete(channelManager.channelMap, channel.ChannelID())
-
+	delete(channelManager.channelMap, channelID)
 }

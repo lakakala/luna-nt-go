@@ -116,12 +116,15 @@ func (lc *LocalConn) doStart(ctx context.Context) error {
 
 	waitGroup.Wait()
 
+	lc.channel.Close(ctx)
+	lc.localConn.Close()
+
 	log.CtxInfof(ctx, "LocalConn channelID %d -> localAddr %s close success", lc.channel.ChannelID(), lc.localAddr)
 
 	return nil
 }
 
 func (lc *LocalConn) Close(ctx context.Context) {
-	lc.channel.Close()
+	lc.channel.Close(ctx)
 	lc.localConn.Close()
 }

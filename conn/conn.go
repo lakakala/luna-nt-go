@@ -190,8 +190,8 @@ func (conn *Conn) accptInner(ctx context.Context) {
 		switch frame.Command() {
 		case message.COMMAND_CHANNEL_CREATE_REQ:
 			conn.handleChannelCreateReq(ctx, recvMsgCtx)
-		case message.COMMAND_CHANNEL_CLOSE_REQ:
-			conn.handleChannelCloseReq(ctx, recvMsgCtx)
+		case message.COMMAND_CHANNEL_CLOSE_NOTI:
+			conn.handleChannelCloseNoti(ctx, recvMsgCtx)
 		case message.COMMAND_DATA_NOTI:
 			conn.handleChannelDataNoti(ctx, recvMsgCtx)
 		case message.COMMAND_CHANNEL_WINDOW_UPDATE_NOTI:
@@ -231,10 +231,10 @@ func (conn *Conn) handleChannelCreateReq(ctx context.Context, recvCtx *RecvMessa
 	log.CtxInfof(ctx, "handleChannelCreateReq accept newChannel %d success", channelID)
 }
 
-func (conn *Conn) handleChannelCloseReq(ctx context.Context, recvCtx *RecvMessageContext) {
-	channelCloseReq := recvCtx.Frame().Msg().Msg().(*pb.ChannelCloseReq)
+func (conn *Conn) handleChannelCloseNoti(ctx context.Context, recvCtx *RecvMessageContext) {
+	channelCloseNoti := recvCtx.Frame().Msg().Msg().(*pb.ChannelCloseNoti)
 
-	channelID := channelCloseReq.GetChannelId()
+	channelID := channelCloseNoti.GetChannelId()
 
 	channel := conn.channelManager.GetChannel(ctx, channelID)
 	if channel == nil {
@@ -242,7 +242,7 @@ func (conn *Conn) handleChannelCloseReq(ctx context.Context, recvCtx *RecvMessag
 		return
 	}
 
-	recvCtx.SendResp(ctx, message.MakeChannelCloseResp(0, fmt.Sprintf("channelID %d close success", channelID)))
+	conn.channelManager.RemoveChannel(ctx, channelID)
 }
 
 func (conn *Conn) handleChannelDataNoti(ctx context.Context, recvCtx *RecvMessageContext) {
