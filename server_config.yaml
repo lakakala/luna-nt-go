@@ -12,4 +12,7 @@ clients:
         type: http_proxy
         http_proxy_bind_addr: 0.0.0.0:3001
         http_proxy_allow_hosts: ["192.168.124.27:18080"]
-
+      - id: 3
+        type: http_reverse_proxy
+        http_reverse_proxy_bind_addr: 0.0.0.0:3002
+        http_reverse_proxy_local_addr: 192.168.124.27:18080

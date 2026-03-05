@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	BindTypeTcp       = "tcp"
-	BindTypeHttpProxy = "http_proxy"
+	BindTypeTcp              = "tcp"
+	BindTypeHttpProxy        = "http_proxy"
+	BindTypeHttpReverseProxy = "http_reverse_proxy"
 )
 
 type ClientBind struct {
@@ -21,6 +22,9 @@ type ClientBind struct {
 	// for type = http_proxy
 	HttpProxyBindAddr      string   `yaml:"http_proxy_bind_addr"`
 	HttpProxyAllowHostList []string `yaml:"http_proxy_allow_hosts"`
+
+	HttpReverseProxyBindAddr  string `yaml:"http_reverse_proxy_bind_addr"`
+	HttpReverseProxyLocalAddr string `yaml:"http_reverse_proxy_local_addr"`
 }
 
 type ClientConfig struct {

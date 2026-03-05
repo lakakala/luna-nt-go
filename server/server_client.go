@@ -178,6 +178,10 @@ func (c *Client) startRemoteListener(ctx context.Context) error {
 			httpProxyListener := newHttpProxyListener(clientBind.ID, clientBind.HttpProxyBindAddr, clientBind.HttpProxyAllowHostList, c, c.clientListenerManager)
 
 			listener = httpProxyListener
+		} else if clientBind.Type == BindTypeHttpReverseProxy {
+			httpReverseProxyListener := newHttpReverseProxyListener(clientBind.ID, clientBind.HttpReverseProxyLocalAddr, clientBind.HttpReverseProxyBindAddr, c)
+
+			listener = httpReverseProxyListener
 		} else {
 			return errors.New("")
 		}
