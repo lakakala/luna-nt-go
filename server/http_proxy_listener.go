@@ -61,12 +61,13 @@ func (h *HttpProxyListener) doStart(ctx context.Context) error {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.CtxWarnf(ctx, "")
-			continue
+			return err
 		}
 
 		go h.handleConn(ctx, conn)
 	}
+
+	return nil
 }
 
 func (h *HttpProxyListener) handleConn(ctx context.Context, conn net.Conn) {
