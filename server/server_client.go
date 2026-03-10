@@ -142,6 +142,11 @@ func (c *Client) handleAuthReq(ctx context.Context, recvCtx *conn.RecvMessageCon
 }
 
 func (c *Client) connect(ctx context.Context, localAddr string) (*conn.Channel, error) {
+
+	if c.GetStatus() != ClientStatusInited {
+		return nil, errors.New("client not inited")
+	}
+
 	channel, err := c.conn.CreateChannel(ctx)
 	if err != nil {
 		return nil, err

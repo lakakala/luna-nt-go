@@ -232,6 +232,18 @@ func (conn *Conn) handleChannelCreateReq(ctx context.Context, recvCtx *RecvMessa
 }
 
 func (conn *Conn) handleChannelCloseNoti(ctx context.Context, recvCtx *RecvMessageContext) {
+	status := func() ConnStatusType {
+		conn.mutex.Lock()
+		defer conn.mutex.Unlock()
+
+		return conn.status
+	}()
+
+	if status != ConnStatusConnected {
+		log.CtxWarnf(ctx, "Conn.handleChannelCloseReq status %d not connected", conn.status)
+		return
+	}
+
 	channelCloseNoti := recvCtx.Frame().Msg().Msg().(*pb.ChannelCloseNoti)
 
 	channelID := channelCloseNoti.GetChannelId()
@@ -246,6 +258,19 @@ func (conn *Conn) handleChannelCloseNoti(ctx context.Context, recvCtx *RecvMessa
 }
 
 func (conn *Conn) handleChannelDataNoti(ctx context.Context, recvCtx *RecvMessageContext) {
+
+	status := func() ConnStatusType {
+		conn.mutex.Lock()
+		defer conn.mutex.Unlock()
+
+		return conn.status
+	}()
+
+	if status != ConnStatusConnected {
+		log.CtxWarnf(ctx, "Conn.handleChannelDataNoti status %d not connected", conn.status)
+		return
+	}
+
 	dataNoti := recvCtx.Frame().Msg().Msg().(*pb.DataNoti)
 
 	channelID := dataNoti.GetChannelId()
@@ -261,6 +286,18 @@ func (conn *Conn) handleChannelDataNoti(ctx context.Context, recvCtx *RecvMessag
 }
 
 func (conn *Conn) handleChannelWindowUpdateNoti(ctx context.Context, recvCtx *RecvMessageContext) {
+	status := func() ConnStatusType {
+		conn.mutex.Lock()
+		defer conn.mutex.Unlock()
+
+		return conn.status
+	}()
+
+	if status != ConnStatusConnected {
+		log.CtxWarnf(ctx, "Conn.handleChannelWindowUpdateNoti status %d not connected", conn.status)
+		return
+	}
+
 	windowUpdateNoti := recvCtx.Frame().Msg().Msg().(*pb.ChannelWindowUpdateNoti)
 
 	channelID := windowUpdateNoti.GetChannelId()
@@ -290,6 +327,17 @@ func (conn *Conn) Accept(ctx context.Context) (*RecvMessageContext, error) {
 }
 
 func (conn *Conn) Send(ctx context.Context, msg message.Message) (message.Message, error) {
+
+	status := func() ConnStatusType {
+		conn.mutex.Lock()
+		defer conn.mutex.Unlock()
+
+		return conn.status
+	}()
+
+	if status != ConnStatusConnected {
+		return nil, fmt.Errorf("conn status %d not connected", conn.status)
+	}
 
 	msgID := conn.nextMsgID.Add(1)
 
