@@ -200,10 +200,16 @@ func (readBuf *ReadBuf) Close() {
 		defer readBuf.mutex.Unlock()
 
 		readBuf.closed = true
+		readBuf.r = 0
+		readBuf.w = 0
 		readBuf.cond.Broadcast()
 	}()
 
 	readBuf.conn.Send(readBuf.ctx, message.MakeChanelWindowUpdateNoti(readBuf.channelID, 1, uint64(readBuf.r)))
+}
+
+func (readBuf *ReadBuf) IsClose(ctx context.Context) bool {
+	return readBuf.closed && readBuf.r == readBuf.w
 }
 
 type WriteBuf struct {
@@ -326,6 +332,10 @@ func (writeBuf *WriteBuf) Close() error {
 	return nil
 }
 
+func (writeBuf *WriteBuf) IsClose(ctx context.Context) bool {
+	return writeBuf.closed
+}
+
 func (writeBuf *WriteBuf) WriteRemaining() int {
 	writeBuf.mutex.Lock()
 	defer writeBuf.mutex.Unlock()
@@ -404,4 +414,14 @@ func (channel *Channel) Close(ctx context.Context) error {
 
 func (channel *Channel) ChannelID() uint64 {
 	return channel.channelID
+}
+
+func (channel *Channel) triggerClose(ctx context.Context) {
+
+	readStatus := channel.readBuf.IsClose(ctx)
+	writeStatus := channel.writeBuf.IsClose(ctx)
+
+	if readStatus && writeStatus {
+		channel.conn.channelManager.RemoveChannel(ctx, channel.channelID)
+	}
 }

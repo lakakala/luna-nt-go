@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"sync"
 
@@ -83,6 +82,8 @@ func (c *Client) start(ctx context.Context) {
 }
 
 func (c *Client) acceptLoop(ctx context.Context) error {
+
+acceptLoop:
 	for {
 		recvCtx, err := c.conn.Accept(ctx)
 		if err != nil {
@@ -94,12 +95,14 @@ func (c *Client) acceptLoop(ctx context.Context) error {
 		case message.COMMAND_AUTH_REQ:
 			c.handleAuthReq(ctx, recvCtx)
 		default:
-			return errors.New(fmt.Sprintf("unknown command %d", frame.Command()))
+			log.CtxWarnf(ctx, "Client.acceptLoop failed unknown command %s", err)
+			break acceptLoop
 		}
-
 	}
 
-	c.Close(ctx)
+	if err := c.cleanup(ctx); err != nil {
+		log.CtxWarnf(ctx, "Client.cleanup failed err %s", err)
+	}
 
 	return nil
 }
@@ -121,6 +124,7 @@ func (c *Client) handleAuthReq(ctx context.Context, recvCtx *conn.RecvMessageCon
 	}()
 
 	if !c.clientManager.AddClient(ctx, c) {
+		c.Close(ctx)
 		recvCtx.SendResp(ctx, message.MakeAuthResp(1, "client already exists"))
 		return
 	}
@@ -168,14 +172,14 @@ func (c *Client) startRemoteListener(ctx context.Context) error {
 
 		var listener ClientListener
 		if clientBind.Type == BindTypeTcp {
-			tcpClientListener, err := newTcpClientListener(ctx, clientBind.ID, clientBind.BindAddr, clientBind.LocalAddr, c, c.clientListenerManager)
+			tcpClientListener, err := newTcpClientListener(ctx, clientBind.ID, clientBind.BindAddr, clientBind.LocalAddr, c)
 			if err != nil {
 				return err
 			}
 
 			listener = tcpClientListener
 		} else if clientBind.Type == BindTypeHttpProxy {
-			httpProxyListener := newHttpProxyListener(clientBind.ID, clientBind.HttpProxyBindAddr, clientBind.HttpProxyAllowHostList, c, c.clientListenerManager)
+			httpProxyListener := newHttpProxyListener(clientBind.ID, clientBind.HttpProxyBindAddr, clientBind.HttpProxyAllowHostList, c)
 
 			listener = httpProxyListener
 		} else if clientBind.Type == BindTypeHttpReverseProxy {
@@ -190,9 +194,15 @@ func (c *Client) startRemoteListener(ctx context.Context) error {
 			return err
 		}
 
-		go listener.Start(ctx)
+		go func() {
+			listener.Start(ctx)
 
-		log.CtxInfof(ctx, "Client %d start listener listenderID %d bindAddr %s localAddr %s success",
+			log.CtxInfof(ctx, "Client %d start listener listenerID %d closed", c.ClientID(), clientBind.ID)
+
+			c.clientListenerManager.RemoveListener(clientBind.ID)
+		}()
+
+		log.CtxInfof(ctx, "Client %d start listener listenerID %d bindAddr %s localAddr %s success",
 			c.ClientID(), clientBind.ID, clientBind.BindAddr, clientBind.LocalAddr)
 	}
 
@@ -200,13 +210,20 @@ func (c *Client) startRemoteListener(ctx context.Context) error {
 }
 
 func (c *Client) Close(ctx context.Context) {
+	c.conn.Close(ctx)
+}
+
+func (c *Client) cleanup(ctx context.Context) error {
 	c.setStatus(ClientStatusCloseing)
+
+	c.clientListenerManager.CloseAll(ctx)
 
 	c.setStatus(ClientStatusClosed)
 	c.conn.Close(ctx)
 
-	c.clientListenerManager.CloseAll(ctx)
 	c.clientManager.RemoveClient(ctx, c.ClientID())
 
 	log.CtxInfof(ctx, "Client %d close", c.ClientID())
+
+	return nil
 }

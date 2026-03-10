@@ -9,27 +9,25 @@ import (
 )
 
 type TcpClientListener struct {
-	id                    uint64
-	bindAddr              string
-	localAddr             string
-	listener              net.Listener
-	client                *Client
-	clientListenerManager *ClientListenerManager
+	id        uint64
+	bindAddr  string
+	localAddr string
+	listener  net.Listener
+	client    *Client
 }
 
-func newTcpClientListener(ctx context.Context, id uint64, bindAddr string, localAddr string, client *Client, clientListenerManager *ClientListenerManager) (ClientListener, error) {
+func newTcpClientListener(ctx context.Context, id uint64, bindAddr string, localAddr string, client *Client) (ClientListener, error) {
 	listener, err := net.Listen("tcp", bindAddr)
 	if err != nil {
 		return nil, err
 	}
 
 	return &TcpClientListener{
-		id:                    id,
-		bindAddr:              bindAddr,
-		localAddr:             localAddr,
-		listener:              listener,
-		client:                client,
-		clientListenerManager: clientListenerManager,
+		id:        id,
+		bindAddr:  bindAddr,
+		localAddr: localAddr,
+		listener:  listener,
+		client:    client,
 	}, nil
 }
 
@@ -45,18 +43,24 @@ func (cl *TcpClientListener) Start(ctx context.Context) {
 			break
 		}
 
-		log.CtxInfof(ctx, "ClientListener %d accept conn remoteAddr %s localAddr %s", cl.ID(), conn.RemoteAddr().String(), conn.LocalAddr().String())
+		log.CtxInfof(ctx, "TcpClientListener %d accept conn remoteAddr %s localAddr %s", cl.ID(), conn.RemoteAddr().String(), conn.LocalAddr().String())
 
 		go cl.handleConn(ctx, conn)
 	}
 
-	log.CtxInfof(ctx, "ClientListener %d start loop end", cl.ID())
+	if err := cl.cleanup(ctx); err != nil {
+		log.CtxWarnf(ctx, "TcpClientListener.cleanup failed err %s", err)
+	}
+
+	log.CtxInfof(ctx, "TcpClientListener %d start loop end", cl.ID())
 }
 
 func (cl *TcpClientListener) Close(ctx context.Context) {
-	cl.listener.Close()
+	if cl.listener != nil {
+		cl.listener.Close()
+	}
 
-	cl.clientListenerManager.RemoveListener(cl.ID())
+	cl.listener = nil
 }
 
 func (cl *TcpClientListener) handleConn(ctx context.Context, conn net.Conn) {
@@ -93,13 +97,6 @@ func (cl *TcpClientListener) doHandleConn(ctx context.Context, conn *net.TCPConn
 			}
 		}
 
-		// _, err = io.Copy(channel, conn)
-		// if err != nil {
-		// 	log.CtxErrorf(ctx, "io.Copy channel %d -> conn %s failed err %s", channel.ChannelID(), conn.RemoteAddr().String(), err)
-		// }
-
-		// channel.CloseRead()
-		// conn.CloseWrite()
 		waitGroup.Done()
 	}()
 
@@ -119,13 +116,7 @@ func (cl *TcpClientListener) doHandleConn(ctx context.Context, conn *net.TCPConn
 				break
 			}
 		}
-		// _, err = io.Copy(conn, channel)
-		// if err != nil {
-		// 	log.CtxErrorf(ctx, "io.Copy conn %s -> channel %d failed err %s", conn.RemoteAddr().String(), channel.ChannelID(), err)
-		// }
 
-		// channel.CloseWrite()
-		// channel.CloseRead()
 		waitGroup.Done()
 	}()
 
@@ -133,5 +124,17 @@ func (cl *TcpClientListener) doHandleConn(ctx context.Context, conn *net.TCPConn
 
 	conn.Close()
 	channel.Close(ctx)
+	return nil
+}
+
+func (cl *TcpClientListener) cleanup(ctx context.Context) error {
+
+	if cl.listener != nil {
+		defer func() {
+			cl.listener = nil
+		}()
+		cl.listener.Close()
+	}
+
 	return nil
 }

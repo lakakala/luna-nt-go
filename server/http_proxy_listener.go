@@ -13,16 +13,14 @@ import (
 )
 
 type HttpProxyListener struct {
-	id                    uint64
-	bindAddr              string
-	client                *Client
-	clientListenerManager *ClientListenerManager
-	listener              net.Listener
-	allowHostMap          map[string]struct{}
+	id           uint64
+	bindAddr     string
+	client       *Client
+	listener     net.Listener
+	allowHostMap map[string]struct{}
 }
 
-func newHttpProxyListener(id uint64, bindAddr string, allowHostList []string, client *Client,
-	clientListenerManager *ClientListenerManager) ClientListener {
+func newHttpProxyListener(id uint64, bindAddr string, allowHostList []string, client *Client) ClientListener {
 
 	allowHostMap := make(map[string]struct{})
 	for _, alloallowHost := range allowHostList {
@@ -30,11 +28,10 @@ func newHttpProxyListener(id uint64, bindAddr string, allowHostList []string, cl
 	}
 
 	return &HttpProxyListener{
-		id:                    id,
-		bindAddr:              bindAddr,
-		allowHostMap:          allowHostMap,
-		client:                client,
-		clientListenerManager: clientListenerManager,
+		id:           id,
+		bindAddr:     bindAddr,
+		allowHostMap: allowHostMap,
+		client:       client,
 	}
 }
 
@@ -48,6 +45,12 @@ func (h *HttpProxyListener) Start(ctx context.Context) {
 	if err := h.doStart(ctx); err != nil {
 		log.CtxWarnf(ctx, "HttpProxyListener.doStart failed err %s", err)
 	}
+
+	if err := h.cleanup(ctx); err != nil {
+		log.CtxWarnf(ctx, "HttpProxyListener.cleanup failed err %s", err)
+	}
+
+	log.CtxInfof(ctx, "HttpProxyListener %d start loop end", h.ID())
 }
 
 func (h *HttpProxyListener) doStart(ctx context.Context) error {
@@ -226,9 +229,27 @@ func (h *HttpProxyListener) doHandleConn(ctx context.Context, conn net.Conn) err
 
 // Close implements [ClientListener].
 func (h *HttpProxyListener) Close(ctx context.Context) {
-	h.listener.Close()
+	if h.listener != nil {
+		defer func() {
+			h.listener = nil
+		}()
 
-	h.clientListenerManager.RemoveListener(h.ID())
+		h.listener.Close()
+	}
+}
+
+func (h *HttpProxyListener) cleanup(ctx context.Context) error {
+
+	if h.listener != nil {
+		defer func() {
+			h.listener = nil
+		}()
+
+		return h.listener.Close()
+
+	}
+
+	return nil
 }
 
 var _ ClientListener = (*HttpProxyListener)(nil)

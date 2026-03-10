@@ -29,11 +29,6 @@ func newHttpReverseProxyListener(id uint64, localAddr, bindAddr string, client *
 	}
 }
 
-// Close implements [ClientListener].
-func (h *HttpReverseProxyListener) Close(ctx context.Context) {
-	h.listener.Close()
-}
-
 // ID implements [ClientListener].
 func (h *HttpReverseProxyListener) ID() uint64 {
 	return h.id
@@ -79,6 +74,10 @@ func (h *HttpReverseProxyListener) doStart(ctx context.Context) error {
 				log.CtxWarnf(ctx, "HttpReverseProxyListener.handleConn failed err %s", err)
 			}
 		}()
+	}
+
+	if err := h.cleanup(ctx); err != nil {
+		log.CtxWarnf(ctx, "HttpReverseProxyListener.cleanup failed err %s", err)
 	}
 
 	return nil
@@ -137,6 +136,20 @@ func (h *HttpReverseProxyListener) handleConn(ctx context.Context, conn net.Conn
 			return err
 		}
 	}
+}
+
+func (h *HttpReverseProxyListener) cleanup(ctx context.Context) error {
+	if h.listener != nil {
+		defer func() {
+			h.listener = nil
+		}()
+		return h.listener.Close()
+	}
 
 	return nil
+}
+
+// Close implements [ClientListener].
+func (h *HttpReverseProxyListener) Close(ctx context.Context) {
+	_ = h.cleanup(ctx)
 }

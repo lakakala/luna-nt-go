@@ -50,3 +50,11 @@ func (channelManager *ChannelManager) RemoveChannel(ctx context.Context, channel
 
 	delete(channelManager.channelMap, channelID)
 }
+
+func (channelManager *ChannelManager) CloseAll(ctx context.Context) error {
+	return nil
+}
+
+func (channelManager *ChannelManager) handleChannelAckMessage(ctx context.Context) {
+
+}

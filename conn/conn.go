@@ -369,6 +369,10 @@ func (conn *Conn) Close(ctx context.Context) {
 		conn.status = ConnStatusClosing
 	}()
 
+	if err := conn.channelManager.CloseAll(ctx); err != nil {
+		log.CtxWarnf(ctx, "ChannelManager.CloseAll failed err %s", err)
+	}
+
 	conn.closeSendMsgMap(ctx)
 
 	conn.conn.Close()
